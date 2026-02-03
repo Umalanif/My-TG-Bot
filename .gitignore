@@ -1,0 +1,17 @@
+# Секреты и токены
+.env
+*.pem
+*.key
+
+# База данных
+*.db
+*.db-journal
+
+# Зависимости
+node_modules/
+dist/
+build/
+
+# Логи и системные файлы
+*.log
+.DS_Store
