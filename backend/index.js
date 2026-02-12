@@ -7,7 +7,9 @@ import bodyParser from 'body-parser';
 import axios from 'axios';
 import Database from 'better-sqlite3';
 import { validate } from '@telegram-apps/init-data-node';
+import { v4 as uuidv4 } from 'uuid';
 import dbManager from './db.js';
+import database from './database.js';
 import { authMiddleware } from './middleware/authMiddleware.js';
 
 // Инициализация сервисов
@@ -376,13 +378,200 @@ app.post('/api/subscription/activate', authMiddleware, async (req, res) => {
 });
 
 /**
+ * GET /api/vpn/key - Получение или создание ключа VPN для пользователя
+ * Принимает Telegram ID пользователя, проверяет наличие ключа в базе данных,
+ * если ключа нет - создает нового клиента в 3X-UI через API.
+ * Возвращает HTTPS-ссылку на подписку.
+ */
+app.get('/api/vpn/key', authMiddleware, async (req, res) => {
+  try {
+    const { tg_id } = req.user;
+    
+    if (!tg_id) {
+      return res.status(400).json({
+        message: 'Отсутствует Telegram ID пользователя'
+      });
+    }
+
+    // Получаем пользователя из базы данных
+    let user = database.getUserByTgId(tg_id);
+    
+    // Если пользователя нет в базе, создаем его
+    if (!user) {
+      user = database.upsertUser({
+        tg_id,
+        username: req.user.username || '',
+        first_name: req.user.first_name || ''
+      });
+    }
+
+    // Проверяем, есть ли активный VPN клиент у пользователя
+    const activeClient = database.getActiveVpnClientByUserId(user.id);
+    
+    if (activeClient) {
+      // Клиент уже существует, возвращаем существующую конфигурацию
+      return res.status(200).json({
+        message: 'VPN ключ уже существует',
+        status: 'existing',
+        user: {
+          tg_id: user.tg_id,
+          username: user.username,
+          uuid: user.uuid
+        },
+        vpn_client: {
+          uuid: activeClient.uuid,
+          status: activeClient.status,
+          config_url: activeClient.config_url,
+          created_at: activeClient.created_at
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Если XUI сервис недоступен, создаем только запись в локальной базе
+    if (!xuiService) {
+      xuiService = await initializeXuiService();
+    }
+
+    if (!xuiService) {
+      // XUI сервис недоступен, создаем клиента только в локальной базе
+      const clientUuid = uuidv4();
+      const vpnClient = database.createVpnClient({
+        user_id: user.id,
+        uuid: clientUuid,
+        email: `tg_${user.tg_id}_${Date.now()}@vpn.local`,
+        status: 'active',
+        config_url: null
+      });
+
+      return res.status(200).json({
+        message: 'VPN ключ создан в локальной базе (3X-UI сервис недоступен)',
+        status: 'created_local',
+        user: {
+          tg_id: user.tg_id,
+          username: user.username,
+          uuid: user.uuid
+        },
+        vpn_client: {
+          uuid: vpnClient.uuid,
+          status: vpnClient.status,
+          config_url: vpnClient.config_url,
+          created_at: vpnClient.created_at
+        },
+        warning: '3X-UI сервис недоступен - клиент создан только в локальной базе',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Создаем клиента в 3X-UI
+    try {
+      // Генерируем UUID для клиента
+      const clientUuid = uuidv4();
+      
+      // Подготавливаем данные клиента для 3X-UI
+      const clientEmail = `tg_${user.tg_id}_${Date.now()}@vpn.service`;
+      const inboundId = process.env.XUI_INBOUND_ID || 1;
+      
+      const clientData = {
+        email: clientEmail,
+        uuid: clientUuid,
+        flow: '',
+        upload: 0,
+        download: 0,
+        total: 0,
+        expiryTime: 0,
+        enable: true,
+        remarks: `Telegram user: ${user.username || user.tg_id}`
+      };
+
+      // Создаем клиента в 3X-UI
+      const createdClient = await xuiService.createClient(clientData, parseInt(inboundId));
+      
+      // Получаем конфигурацию для клиента
+      const configs = await xuiService.getClientConfigs();
+      const userConfig = configs.find(config => config.includes(clientEmail)) ||
+                       `https://${process.env.XUI_BASE_URL || 'example.com'}/api/vpn/config/${clientUuid}`;
+      
+      // Сохраняем клиента в локальной базе
+      const vpnClient = database.createVpnClient({
+        user_id: user.id,
+        uuid: clientUuid,
+        email: clientEmail,
+        xui_client_id: createdClient.id || clientUuid,
+        inbound_id: inboundId,
+        status: 'active',
+        config_url: userConfig
+      });
+
+      // Возвращаем успешный ответ с конфигурацией
+      return res.status(200).json({
+        message: 'VPN ключ успешно создан',
+        status: 'created',
+        user: {
+          tg_id: user.tg_id,
+          username: user.username,
+          uuid: user.uuid
+        },
+        vpn_client: {
+          uuid: vpnClient.uuid,
+          status: vpnClient.status,
+          config_url: vpnClient.config_url,
+          created_at: vpnClient.created_at
+        },
+        config_url: vpnClient.config_url,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (xuiError) {
+      console.error('Ошибка при создании клиента в 3X-UI:', xuiError);
+      
+      // Создаем клиента только в локальной базе при ошибке 3X-UI
+      const clientUuid = uuidv4();
+      const vpnClient = database.createVpnClient({
+        user_id: user.id,
+        uuid: clientUuid,
+        email: `tg_${user.tg_id}_${Date.now()}@vpn.fallback`,
+        status: 'active',
+        config_url: null
+      });
+
+      return res.status(200).json({
+        message: 'VPN ключ создан в локальной базе (ошибка 3X-UI)',
+        status: 'created_fallback',
+        user: {
+          tg_id: user.tg_id,
+          username: user.username,
+          uuid: user.uuid
+        },
+        vpn_client: {
+          uuid: vpnClient.uuid,
+          status: vpnClient.status,
+          config_url: vpnClient.config_url,
+          created_at: vpnClient.created_at
+        },
+        warning: `3X-UI сервис вернул ошибку: ${xuiError.message}`,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+  } catch (error) {
+    console.error('Ошибка получения/создания VPN ключа:', error);
+    res.status(500).json({
+      message: 'Внутренняя ошибка сервера при получении VPN ключа',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
  * Вспомогательная функция для генерации UUID если не доступна crypto.randomUUID
  * @returns {string} Сгенерированный UUID
  */
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     const r = Math.random() * 16 | 0;
-    const v = c == 'x' ? r : (r & 0x3 | 0x8);
+    const v = c == 'x' ? r : (r & 0x3 | 0.8);
     return v.toString(16);
   });
 }

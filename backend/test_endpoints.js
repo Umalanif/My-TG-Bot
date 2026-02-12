@@ -30,8 +30,17 @@ async function testEndpoints() {
       console.log('✓ /api/subscription/activate корректно вернул ошибку аутентификации:', error.response.status);
     }
     
+    // Тестируем /api/vpn/key (без аутентификации - должен вернуть ошибку)
+    console.log('\n4. Тестируем /api/vpn/key без аутентификации...');
+    try {
+      const vpnKeyResponse = await axios.get(`${baseUrl}/api/vpn/key`);
+      console.log('✗ /api/vpn/key (ожидается ошибка):', vpnKeyResponse.data);
+    } catch (error) {
+      console.log('✓ /api/vpn/key корректно вернул ошибку аутентификации:', error.response.status);
+    }
+    
     console.log('\n✓ Все тесты пройдены успешно! Эндпоинты работают корректно.');
-    console.log('\nПримечание: Для полноценного тестирования эндпоинтов /api/user/me и /api/subscription/activate');
+    console.log('\nПримечание: Для полноценного тестирования эндпоинтов /api/user/me, /api/subscription/activate и /api/vpn/key');
     console.log('необходимо предоставить корректные заголовки аутентификации X-Telegram-InitData.');
     
   } catch (error) {
