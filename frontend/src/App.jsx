@@ -1,56 +1,53 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { miniApp, viewport, openLink, retrieveLaunchParams, initDataRaw, hapticFeedback } from '@telegram-apps/sdk';
+import { miniApp, viewport, openLink, retrieveLaunchParams, hapticFeedback } from '@telegram-apps/sdk';
+import './App.css'; // Импортируем наш новый CSS файл
 
 // --- КОНФИГУРАЦИЯ ССЫЛОК ---
 const LINKS = {
-  android: 'https://play.google.com/store/apps/details?id=com.happproxy',
-  ios: 'https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973',
-  desktop: 'https://github.com/hiddify/hiddify-app/releases',
-  support: 'https://t.me/nexus_vpn_support' // Добавил для футера
+  android: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
+  ios: 'https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone',
+  windows: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Windows-Setup-x64.Msix',
+  macos: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-MacOS.dmg',
+  linux: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Linux-x64.AppImage',
+  support: 'https://t.me/nexus_vpn_support',
+  deep_config: 'hiddify://install-config?url=',
+  sub_url: 'vless://uuid@ip:port?security=reality&sni=google.com&fp=chrome&pbk=key&sid=id&type=grpc&serviceName=grpc#NexusVPN'
 };
 
-// --- ИКОНКИ (SVG в стиле Material Design) ---
+// --- ИКОНКИ ---
 const Icons = {
-  More: () => <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>,
-  Close: () => <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>,
-  VpnLock: () => <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M22 4v-2h-18l-2 2v18h20v-18h-2zm-2 16h-16v-14h16v14z"/><path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0-2c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/></svg>, // Упрощенная иконка
-  Person: () => <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>,
-  Smartphone: () => <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>,
-  Laptop: () => <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M20 18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/></svg>,
-  Tv: () => <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>,
-  ArrowRight: () => <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>,
-  ErrorOutline: () => <svg width="32" height="32" fill="currentColor" viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>
+  VpnLock: () => <span className="material-icons-round">vpn_lock</span>,
+  Person: () => <span className="material-icons-round">person</span>,
+  Smartphone: () => <span className="material-icons-round">smartphone</span>,
+  SmartphoneSimple: () => <span className="material-icons-round">phone_android</span>,
+  Laptop: () => <span className="material-icons-round">laptop_mac</span>,
+  Tv: () => <span className="material-icons-round">tv</span>,
+  ChevronRight: () => <span className="material-icons-round">chevron_right</span>,
+  Error: () => <span className="material-icons-round">error_outline</span>,
+  Rocket: () => <span className="material-icons-round">rocket_launch</span>,
+  Copy: () => <span className="material-icons-round">content_copy</span>,
+  Apple: () => <span className="material-icons-round">apple</span>,
+  Android: () => <span className="material-icons-round">android</span>,
+  Windows: () => <span className="material-icons-round">desktop_windows</span>,
 };
 
-// --- ЛОГИКА SDK ---
 function getLaunchData() {
   try {
     const lp = retrieveLaunchParams();
-    if (lp?.initData?.user) return { user: lp.initData.user, rawData: initDataRaw(), theme: lp.themeParams };
+    if (lp?.initData?.user) return { user: lp.initData.user };
   } catch (e) {}
-  try {
-    const params = new URLSearchParams(window.location.hash.slice(1));
-    const tgData = params.get('tgWebAppData');
-    if (tgData) {
-      const user = JSON.parse(new URLSearchParams(tgData).get('user'));
-      return { user, rawData: tgData, theme: {} };
-    }
-  } catch (e) {}
-  // Fallback для тестов в браузере
-  return { user: { first_name: "Test User", username: "tester", id: 123456 }, rawData: "", theme: {} };
+  return { user: { first_name: "User" } };
 }
 
 function App() {
   const [isMounted, setIsMounted] = useState(false);
+  const [modal, setModal] = useState({ active: false, type: null, step: 1 });
   const launchData = useMemo(() => getLaunchData(), []);
 
-  // 1. Инициализация (Принудительно темная тема для стиля Nexus)
   useEffect(() => {
     const init = async () => {
       if (miniApp.mount.isAvailable()) await miniApp.mount();
       if (viewport.mount.isAvailable()) await viewport.mount();
-      
-      // Устанавливаем цвета хедера под наш фон
       if (miniApp.setHeaderColor.isAvailable()) {
         miniApp.setHeaderColor('#050b14');
         miniApp.setBackgroundColor('#050b14');
@@ -60,283 +57,253 @@ function App() {
     init();
   }, []);
 
-  const handleAction = (type) => {
+  const handleAction = (type, payload = null) => {
     if (hapticFeedback.impactOccurred.isAvailable()) hapticFeedback.impactOccurred('light');
-    if (LINKS[type]) openLink(LINKS[type]);
-  };
 
-  if (!launchData || !isMounted) return <div style={{ background: '#050b14', minHeight: '100vh', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Nexus...</div>;
-
-  const { user } = launchData;
-
-  // --- СТИЛИ (CSS-in-JS based on Nexus Design) ---
-  const colors = {
-    primary: "#00f0ff", // Neon Cyan
-    secondary: "#7000ff", // Neon Purple
-    bgDark: "#050b14", // Deep Navy
-    glass: "rgba(15, 23, 42, 0.6)",
-    glassCard: "rgba(30, 41, 59, 0.4)",
-    danger: "#ff0055",
-    textGray: "#9ca3af",
-    textWhite: "#f3f4f6"
-  };
-
-  // Inject Global Fonts and Keyframes
-  const globalStyles = `
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
-    
-    @keyframes pulse-neon {
-      0%, 100% { opacity: 1; text-shadow: 0 0 10px ${colors.primary}; }
-      50% { opacity: 0.7; text-shadow: 0 0 20px ${colors.primary}, 0 0 30px ${colors.secondary}; }
+    if (type === 'smartphone' || type === 'desktop') {
+      setModal({ active: true, type: type, step: 1 });
+      return;
     }
-    
-    body { margin: 0; padding: 0; background: ${colors.bgDark}; overflow-x: hidden; }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  `;
-
-  const s = {
-    page: {
-      minHeight: '100vh',
-      background: `
-        radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-        radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-        radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%),
-        #050b14
-      `,
-      backgroundAttachment: 'fixed',
-      fontFamily: '"Rajdhani", sans-serif',
-      color: colors.textWhite,
-      padding: '16px',
-      position: 'relative'
-    },
-    scanlines: {
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1))',
-      backgroundSize: '100% 4px',
-      pointerEvents: 'none', zIndex: 50, opacity: 0.2
-    },
-    // Header
-    header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', position: 'relative', zIndex: 10 },
-    logoBox: { display: 'flex', alignItems: 'center', gap: '8px' },
-    logoIcon: { color: colors.primary, animation: 'pulse-neon 2s infinite' },
-    logoText: { fontFamily: '"Orbitron", sans-serif', fontSize: '20px', fontWeight: 'bold', letterSpacing: '0.05em' },
-    logoSuffix: { color: colors.primary },
-    logoSub: { color: colors.textGray, fontSize: '14px', fontWeight: 'normal', marginLeft: '8px' },
-    headerActions: { display: 'flex', gap: '12px', color: colors.textGray },
-
-    // Glass Panel (Main)
-    glassPanel: {
-      background: colors.glass,
-      backdropFilter: 'blur(12px)',
-      WebkitBackdropFilter: 'blur(12px)',
-      border: '1px solid rgba(255, 255, 255, 0.08)',
-      borderRadius: '16px',
-      padding: '20px',
-      marginBottom: '24px',
-      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-      position: 'relative', overflow: 'hidden'
-    },
-    panelHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid rgba(55, 65, 81, 0.5)', paddingBottom: '16px' },
-    panelTitle: { fontFamily: '"Orbitron", sans-serif', fontSize: '24px', fontWeight: 'bold', letterSpacing: '0.05em' },
-    statusBadge: {
-      padding: '4px 12px', background: 'rgba(255, 0, 85, 0.1)', border: '1px solid rgba(255, 0, 85, 0.3)',
-      color: colors.danger, fontSize: '12px', fontWeight: 'bold', borderRadius: '999px',
-      textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 0 10px rgba(255, 0, 85, 0.3)'
-    },
-
-    // User Grid
-    grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' },
-    glassCardSmall: {
-      background: colors.glassCard, backdropFilter: 'blur(8px)', border: '1px solid rgba(255, 255, 255, 0.05)',
-      borderRadius: '12px', padding: '12px', display: 'flex', alignItems: 'center', gap: '12px'
-    },
-    iconCircle: {
-      width: '40px', height: '40px', borderRadius: '50%', background: '#1f2937',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #374151', color: '#d1d5db'
-    },
-    labelSmall: { fontSize: '12px', color: colors.textGray, textTransform: 'uppercase', fontWeight: 'bold', letterSpacing: '0.05em' },
-    valueMain: { fontFamily: '"Orbitron", sans-serif', fontSize: '14px', fontWeight: '600' },
-
-    // Expired Banner
-    expiredBanner: {
-      background: 'linear-gradient(to right, rgba(255, 0, 85, 0.2), transparent)',
-      borderLeft: `4px solid ${colors.danger}`,
-      borderRadius: '0 12px 12px 0', padding: '16px',
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-    },
-    
-    // Buttons & Cards
-    sectionTitle: { fontSize: '12px', fontWeight: 'bold', color: colors.textGray, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '12px', paddingLeft: '8px' },
-    actionBtn: {
-      width: '100%',
-      background: colors.glassCard,
-      border: '1px solid rgba(255, 255, 255, 0.05)',
-      borderRadius: '12px', padding: '16px',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      color: 'white', cursor: 'pointer', marginBottom: '12px',
-      transition: 'all 0.3s ease'
-    },
-    // Helpers for hover effects would usually go here, but inline styles limit hover. 
-    // We rely on simple layout here.
-
-    flexGap: { display: 'flex', alignItems: 'center', gap: '16px' },
-    iconBoxGradient: {
-      width: '40px', height: '40px', borderRadius: '8px',
-      background: 'linear-gradient(135deg, #1f2937, #111827)',
-      border: '1px solid #374151', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-    },
-    textLeft: { textAlign: 'left' },
-    textLg: { fontSize: '18px', fontWeight: '600', display: 'block' },
-    textSub: { fontSize: '12px', color: colors.textGray },
-    
-    footer: { marginTop: '32px', textAlign: 'center', paddingBottom: '16px' },
-    link: { color: 'rgba(0, 240, 255, 0.7)', fontSize: '14px', fontFamily: 'monospace', textDecoration: 'none' }
+    if (type === 'copy_key') {
+       navigator.clipboard.writeText(LINKS.sub_url);
+       if (hapticFeedback.notificationOccurred.isAvailable()) hapticFeedback.notificationOccurred('success');
+       return;
+    }
+    if (type === 'deep') {
+        openLink(payload);
+    } else if (payload) {
+        openLink(payload);
+    } else if (LINKS[type]) {
+        openLink(LINKS[type]);
+    }
   };
+
+  if (!isMounted) return <div className="app-container" style={{color:'white'}}>Loading...</div>;
 
   return (
-    <>
-      <style>{globalStyles}</style>
-      <div style={s.page}>
-        <div style={s.scanlines}></div>
+    <div className="app-container">
+      <div className="scanlines"></div>
 
-        {/* 1. HEADER */}
-        <div style={s.header}>
-          <div style={s.logoBox}>
-            <div style={s.logoIcon}><Icons.VpnLock /></div>
-            <h1 style={s.logoText}>
-              NEXUS<span style={s.logoSuffix}>-VPN</span>
-              <span style={s.logoSub}>| Access Hub</span>
+      <main className="main-content">
+
+        {/* HEADER */}
+        <div className="header">
+          <div className="logo-container">
+            <span className="material-icons-round text-primary" style={{fontSize: '28px', animation: 'pulse 2s infinite'}}>vpn_lock</span>
+            <h1 className="logo-text font-orbitron">
+              NEXUS<span className="text-primary">-VPN</span>
             </h1>
-          </div>
-          <div style={s.headerActions}>
-            <Icons.More />
           </div>
         </div>
 
-        {/* 2. MAIN GLASS PANEL (SUBSCRIPTION) */}
-        <div style={s.glassPanel}>
-          {/* Decorative corner */}
-          <div style={{
-            position: 'absolute', top: 0, right: 0, width: '64px', height: '64px',
-            background: 'linear-gradient(to bottom left, rgba(0, 240, 255, 0.1), transparent)',
-            borderRadius: '0 0 0 16px', pointerEvents: 'none'
-          }}></div>
-
-          <div style={s.panelHeader}>
-            <h2 style={s.panelTitle}>ПОДПИСКА</h2>
-            <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-               {/* Toggle visual */}
-               <div style={{width: '40px', height: '20px', background: '#374151', borderRadius: '20px', position: 'relative'}}>
-                 <div style={{width: '16px', height: '16px', background: '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: '2px'}}></div>
-               </div>
-               <span style={s.statusBadge}>Неактивно</span>
-            </div>
+        {/* STATUS PANEL */}
+        <div className="glass-panel">
+          <div className="glow-corner"></div>
+          <div className="panel-header">
+            <h2 className="font-orbitron bold" style={{fontSize: '24px'}}>ПОДПИСКА</h2>
           </div>
-
-          <div style={s.grid}>
-            <div style={s.glassCardSmall}>
-              <div style={s.iconCircle}><Icons.Person /></div>
+          
+          <div className="status-bar">
+            <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
+              <span className="material-icons-round text-danger" style={{fontSize: '32px'}}>error_outline</span>
               <div>
-                <p style={s.labelSmall}>Пользователь</p>
-                <p style={s.valueMain}>{user.first_name}</p>
-              </div>
-            </div>
-            <div style={s.glassCardSmall}>
-              <div style={s.iconCircle}><Icons.Smartphone /></div>
-              <div>
-                <p style={s.labelSmall}>Устройства</p>
-                <p style={s.valueMain}>1 / 5</p>
-              </div>
-            </div>
-          </div>
-
-          <div style={s.expiredBanner}>
-            <div style={s.flexGap}>
-              <div style={{color: colors.danger}}><Icons.ErrorOutline /></div>
-              <div>
-                <p style={{...s.labelSmall, color: colors.textGray}}>Статус</p>
-                <p style={{...s.panelTitle, fontSize: '18px', color: colors.danger}}>ИСТЕКЛА</p>
+                <p className="uppercase bold" style={{fontSize:'10px', color: 'var(--text-gray)'}}>Статус</p>
+                <p className="font-orbitron bold text-danger" style={{fontSize:'18px'}}>ИСТЕКЛА</p>
               </div>
             </div>
             <div style={{textAlign: 'right'}}>
-              <p style={{fontSize: '12px', color: colors.textGray}}>Закончилась</p>
-              <p style={{fontFamily: 'monospace', color: '#d1d5db', fontSize: '14px'}}>26.01.2026</p>
+              <p style={{fontSize:'10px', color: 'var(--text-gray)'}}>До</p>
+              <p style={{fontFamily:'monospace', fontSize:'14px', color: '#d1d5db'}}>26.01.2026</p>
             </div>
           </div>
         </div>
 
-        {/* 3. ADD SUB BUTTON */}
+        {/* --- MAIN ACTION: HIDDIFY --- */}
         <div style={{marginBottom: '24px'}}>
-            <h3 style={s.sectionTitle}>Есть V2RayTun или Hiddify?</h3>
-            <button 
-                onClick={() => handleAction('copy')} // В оригинале копирование ключа
-                style={{...s.actionBtn, border: `1px solid ${colors.primary}40`}}
-            >
-                <div style={s.flexGap}>
-                    <div style={{display: 'flex', marginRight: '8px'}}>
-                        <div style={{width: '32px', height: '32px', background: '#111827', border: '1px solid #4b5563', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontFamily: '"Orbitron", sans-serif', zIndex: 2}}>H</div>
-                        <div style={{width: '32px', height: '32px', background: '#000', border: '1px solid #4b5563', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontFamily: '"Orbitron", sans-serif', marginLeft: '-12px'}}>v2</div>
-                    </div>
-                    <span style={{fontWeight: '600', color: 'white'}}>Добавить подписку</span>
-                </div>
-                <div style={{color: colors.textGray}}><Icons.ArrowRight /></div>
-            </button>
+           <h3 className="section-title">Требуемый клиент</h3>
+
+           <div className="hiddify-btn-wrapper">
+              <div className="hiddify-inner">
+                  {/* Большая кнопка */}
+                  <button 
+                     onClick={() => handleAction('deep', LINKS.deep_config + encodeURIComponent(LINKS.sub_url))}
+                     className="btn-main-action"
+                  >
+                     <div className="hiddify-icon">
+                        <svg viewBox="0 0 1000 1000" style={{width:'28px', height:'28px', fill:'black'}}>
+                            <path d="M1.000001,589.468628 C2.771058,587.061707 4.274509,584.750183 6.362225,583.253601 C13.241864,578.322021 20.152021,573.388489 27.374897,568.988220 C55.219608,552.024841 83.171227,535.236572 111.119110,518.443176 C141.035187,500.467041 170.606247,481.863831 201.104828,464.933899 C214.929230,457.259918 234.865494,466.541107 234.924423,485.493042 C235.122406,549.156616 235.144989,612.821838 234.886475,676.484924 C234.829788,690.440002 245.391037,701.913086 260.223206,701.984985 C274.388977,702.053711 288.556580,702.115295 302.721161,701.968506 C317.918945,701.810974 328.015381,690.981079 328.011902,676.448914 C327.988892,580.452637 328.029297,484.456360 327.955780,388.460144 C327.948242,378.619659 332.308350,371.746094 340.550629,366.799286 C370.069794,349.082611 399.520233,331.251404 429.032501,313.523163 C453.091003,299.071075 477.205719,284.712616 501.284760,270.294739 C508.841125,265.770172 516.504211,261.403870 523.870178,256.585632 C538.573120,246.968094 557.312561,253.509216 561.498779,270.044769 C561.896606,271.616272 561.980408,273.301849 561.980591,274.934448 C562.001221,464.260437 562.001404,653.586426 561.997070,842.912415 C561.996765,855.779602 551.851807,865.993103 539.054138,865.995056 C476.389893,866.004883 413.725555,865.932617 351.061554,866.058777 C339.268738,866.082520 327.471558,854.817749 327.812958,842.959106 C328.460114,820.478577 327.720093,797.961487 328.100830,775.468811 C328.344574,761.069580 317.821533,748.448608 301.746094,748.917236 C288.091553,749.315308 274.414001,749.153076 260.750641,748.958679 C245.373535,748.739868 234.604294,759.816284 234.886185,774.567322 C235.319138,797.224792 234.917374,819.897156 235.031677,842.562317 C235.097214,855.560181 224.483521,866.035339 211.702454,866.024109 C149.538239,865.969727 87.373932,865.967468 25.209743,866.032288 C15.220128,866.042725 8.019124,861.657166 3.011859,853.226990 C2.723829,852.742065 2.163637,852.418884 1.365048,852.010254 C1.000000,764.645752 1.000000,677.291565 1.000001,589.468628 z"></path>
+                            <path d="M889,851.5 L888.7,853.7 C881.7,861.4 875,866 865.6,866 C803.3,865.9 741,865.8 678.6,866 C666.9,866.1 654.9,856 654.9,842.4 C655,686.8 655,531.1 654.8,375.5 C654.8,362.5 665.3,350.8 679.7,350.9 C731.5,351.1 783.4,351 835.2,351 C844.4,351 853.5,351.1 862.7,350.9 C873.3,350.7 881.5,354.5 886.9,363.8 C887.3,364.5 888,365 888.7,365.3 C889,527 889,689 889,851.5 z"></path>
+                            <path d="M656.1,196.9 C655.4,187.5 662.4,183 668.8,179.1 C710.3,153.9 752,129 793.6,104 C813.4,92.1 833.2,80.1 853.1,68.4 C864.7,61.6 878.1,65 885.1,75.5 C886.1,76.9 887.4,78.3 888.7,79.3 C889,149.3 889,219.7 889,290.5 C888.1,291.7 887,292.2 886.4,293.1 C881.5,300.4 875.4,305 866.2,305 C803.7,304.9 741.2,304.9 678.7,305 C669.4,305 658.2,298.8 656.2,287.2 C657,284.9 657.9,283.2 657.9,281.5 C658,255.1 658,228.7 657.9,202.3 C657.9,200.5 656.7,198.7 656.1,196.9 z"></path>
+                        </svg>
+                     </div>
+                     <div>
+                        <div className="bold" style={{fontSize: '18px', lineHeight: '1.2'}}>Hiddify</div>
+                        <div style={{fontSize: '12px', color: '#94a3b8'}}>Нажмите для подключения</div>
+                     </div>
+                  </button>
+
+                  <div className="divider-vertical"></div>
+
+                  {/* Маленькая кнопка Copy */}
+                  <button 
+                     onClick={(e) => { e.stopPropagation(); handleAction('copy_key'); }}
+                     className="btn-copy-sm"
+                  >
+                     <span style={{color: '#cbd5e1'}}><Icons.Copy /></span>
+                     <span style={{fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b'}}>Copy</span>
+                  </button>
+              </div>
+           </div>
         </div>
 
-        {/* 4. SETUP LINKS */}
+        {/* SETUP LINKS */}
         <div>
-            <h3 style={s.sectionTitle}>Настройка Подключения</h3>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
-                
-                {/* Android */}
-                <button onClick={() => handleAction('android')} style={s.actionBtn}>
-                    <div style={s.flexGap}>
-                        <div style={s.iconBoxGradient}><Icons.Smartphone /></div>
-                        <div style={s.textLeft}>
-                            <span style={s.textLg}>Смартфон</span>
-                            <span style={s.textSub}>Android & iOS</span>
-                        </div>
-                    </div>
-                    <div style={{color: colors.textGray}}><Icons.ArrowRight /></div>
-                </button>
+          <h3 className="section-title">Скачать приложение</h3>
+          <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+            {[
+              { id: 'smartphone', label: 'Смартфон', sub: 'Android & iOS', icon: <Icons.SmartphoneSimple /> },
+              { id: 'desktop', label: 'ПК / Ноутбук', sub: 'Windows, Mac, Linux', icon: <Icons.Laptop /> }
+            ].map((item) => (
+              <button key={item.id} onClick={() => handleAction(item.id)} className="btn-glass">
+                <div className="btn-content">
+                  <div className="icon-box">
+                    <span className="material-icons-round" style={{color: '#cbd5e1'}}>{item.icon}</span>
+                  </div>
+                  <div>
+                    <span style={{display: 'block', fontWeight: '600', fontSize: '18px'}}>{item.label}</span>
+                    <span style={{fontSize: '12px', color: '#94a3b8'}}>{item.sub}</span>
+                  </div>
+                </div>
+                <span className="material-icons-round" style={{color: '#475569'}}>{<Icons.ChevronRight />}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-                {/* PC */}
-                <button onClick={() => handleAction('desktop')} style={s.actionBtn}>
-                    <div style={s.flexGap}>
-                        <div style={s.iconBoxGradient}><Icons.Laptop /></div>
-                        <div style={s.textLeft}>
-                            <span style={s.textLg}>ПК / Ноутбук</span>
-                            <span style={s.textSub}>Windows, Mac, Linux</span>
-                        </div>
-                    </div>
-                    <div style={{color: colors.textGray}}><Icons.ArrowRight /></div>
-                </button>
+        {/* FOOTER */}
+        <div style={{marginTop: '32px', textAlign: 'center'}}>
+          <a
+            href={LINKS.support}
+            onClick={(e) => { e.preventDefault(); handleAction('support'); }}
+            style={{color: 'rgba(0, 240, 255, 0.7)', textDecoration: 'none', fontSize: '14px', fontFamily: 'monospace'}}
+          >
+            @nexus_vpn_support
+          </a>
+        </div>
 
-                {/* TV */}
-                <button onClick={() => handleAction('android')} style={s.actionBtn}>
-                    <div style={s.flexGap}>
-                        <div style={s.iconBoxGradient}><Icons.Tv /></div>
-                        <div style={s.textLeft}>
-                            <span style={s.textLg}>Smart TV</span>
-                            <span style={s.textSub}>Android TV, Box</span>
-                        </div>
-                    </div>
-                    <div style={{color: colors.textGray}}><Icons.ArrowRight /></div>
-                </button>
+      </main>
 
+      {/* --- MODAL --- */}
+      {modal.active && (
+        <div 
+          className="modal-overlay"
+          onClick={(e) => { if(e.target === e.currentTarget) setModal({...modal, active: false}); }}
+        >
+          <div className="modal-content">
+            <div className="drag-handle"></div>
+
+            <div style={{textAlign: 'center', marginBottom: '24px'}}>
+              <h3 className="font-orbitron bold" style={{fontSize: '20px'}}>
+                {modal.type === 'smartphone' ? 'Установка на Смартфон' : 'Установка на ПК'}
+              </h3>
+              <p className="section-title" style={{textAlign: 'center', padding: 0}}>
+                Шаг {modal.step}: {modal.step === 1 ? 'Скачайте приложение' : 'Добавьте подписку'}
+              </p>
             </div>
-        </div>
 
-        {/* 5. FOOTER */}
-        <div style={s.footer}>
-            <a href={LINKS.support} style={s.link} onClick={(e) => { e.preventDefault(); openLink(LINKS.support); }}>
-                @nexus_vpn_support
-            </a>
-        </div>
+            {/* STEP 1: DOWNLOAD */}
+            {modal.step === 1 && (
+              <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                {modal.type === 'smartphone' ? (
+                  <>
+                    <button onClick={() => handleAction('ios', LINKS.ios)} className="btn-glass">
+                      <div className="btn-content"><Icons.Apple /> <div><div className="bold">Hiddify (iOS)</div><div style={{fontSize:'12px', color:'#94a3b8'}}>AppStore</div></div></div>
+                    </button>
+                    <button onClick={() => handleAction('android', LINKS.android)} className="btn-glass">
+                      <div className="btn-content"><Icons.Android /> <div><div className="bold">Hiddify (Android)</div><div style={{fontSize:'12px', color:'#94a3b8'}}>Google Play</div></div></div>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                     <button onClick={() => handleAction('windows', LINKS.windows)} className="btn-glass">
+                      <div className="btn-content"><Icons.Windows /> <div><div className="bold">Hiddify (Windows)</div><div style={{fontSize:'12px', color:'#94a3b8'}}>.Msix</div></div></div>
+                    </button>
+                     <button onClick={() => handleAction('macos', LINKS.macos)} className="btn-glass">
+                      <div className="btn-content"><Icons.Laptop /> <div><div className="bold">Hiddify (macOS)</div><div style={{fontSize:'12px', color:'#94a3b8'}}>.dmg</div></div></div>
+                    </button>
+                     <button onClick={() => handleAction('linux', LINKS.linux)} className="btn-glass">
+                      <div className="btn-content"><Icons.Laptop /> <div><div className="bold">Hiddify (Linux)</div><div style={{fontSize:'12px', color:'#94a3b8'}}>.AppImage</div></div></div>
+                    </button>
+                  </>
+                )}
 
-      </div>
-    </>
+                <button 
+                  onClick={() => setModal({...modal, step: 2})}
+                  className="btn-primary"
+                >
+                  Далее
+                </button>
+              </div>
+            )}
+
+            {/* STEP 2: CONFIG */}
+            {modal.step === 2 && (
+              <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                 <div style={{padding:'12px', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.3)', borderRadius: '12px', marginBottom: '8px'}}>
+                    <p style={{fontSize: '10px', color: '#94a3b8', margin: 0}}>Выбрано приложение:</p>
+                    <p className="bold text-primary" style={{margin: 0}}>Hiddify</p>
+                 </div>
+
+                 <button 
+                    onClick={() => handleAction('deep', LINKS.deep_config + encodeURIComponent(LINKS.sub_url))} 
+                    className="btn-glass"
+                    style={{background: 'linear-gradient(to right, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9))', border: '1px solid rgba(0, 240, 255, 0.3)'}}
+                  >
+                    <div className="btn-content">
+                      <span className="text-primary"><Icons.Rocket /></span>
+                      <div>
+                        <div className="bold">Авто-настройка</div>
+                        <div style={{fontSize: '10px', color: '#94a3b8'}}>Нажмите для импорта конфига</div>
+                      </div>
+                    </div>
+                 </button>
+
+                 <button 
+                    onClick={() => handleAction('copy_key')}
+                    className="btn-glass"
+                  >
+                    <div className="btn-content">
+                      <span style={{color: '#cbd5e1'}}><Icons.Copy /></span>
+                      <div>
+                        <div className="bold">Скопировать ключ</div>
+                        <div style={{fontSize: '10px', color: '#94a3b8'}}>Вставить вручную</div>
+                      </div>
+                    </div>
+                 </button>
+
+                 <div style={{display: 'flex', gap: '12px', marginTop: '12px'}}>
+                   <button 
+                     onClick={() => setModal({...modal, step: 1})}
+                     className="btn-outline"
+                   >
+                     Назад
+                   </button>
+                   <button 
+                     onClick={() => setModal({...modal, active: false})}
+                     className="btn-primary"
+                     style={{marginTop: 0, flex: 1}}
+                   >
+                     Готово
+                   </button>
+                 </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 }
 

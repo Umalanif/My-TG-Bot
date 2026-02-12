@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   // БАЗОВЫЙ ПУТЬ: Это самое важное.
   // Указывает Vite, что все ссылки в index.html должны начинаться с /app/
-  base: '/app/',
+  base: './',
   build: {
     outDir: 'dist',
     // Очищать папку перед каждой сборкой
