@@ -3,6 +3,7 @@ import { miniApp, viewport, openLink, retrieveLaunchParams, hapticFeedback } fro
 import './App.css';
 
 // --- КОНФИГУРАЦИЯ ССЫЛОК ---
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 const LINKS = {
   android: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
   ios: 'https://apps.apple.com/us/app/hiddify-proxy-vpn/id6596777532?platform=iphone',
@@ -11,8 +12,8 @@ const LINKS = {
   linux: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Linux-x64.AppImage',
   support: 'https://t.me/nexus_vpn_support',
   deep_config: 'hiddify://install-config?url=',
-  // Путь через Nginx мостик
-  api_url: 'https://jsstudy.xyz/api/vpn/key'
+  // Используем прокси Vite в разработке, в продакшене будет абсолютный URL
+  api_url: `${API_BASE_URL}/vpn/key`
 };
 
 const Icons = {
@@ -66,6 +67,15 @@ function App() {
           }
         });
         
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          throw new Error(`Expected JSON but got ${contentType}`);
+        }
+
         const data = await response.json();
 
         if (data.vpn_client) {
