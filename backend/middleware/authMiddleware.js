@@ -1,20 +1,14 @@
 import { validate } from '@telegram-apps/init-data-node';
-import dbManager from '../db.js';
+import database from '../database.js';
 
 /**
  * Middleware для проверки аутентификации пользователя Telegram
- * Извлекает initData из заголовка x-telegram-initdata, валидирует её
- * и прикрепляет данные пользователя к req.user
- * @param {Object} req - Объект запроса
- * @param {Object} res - Объект ответа
- * @param {Function} next - Функция перехода к следующему middleware
- * @returns {void}
  */
 export const authMiddleware = (req, res, next) => {
   try {
-    // Извлекаем initData из заголовка x-telegram-initdata
+    // Извлекаем initData из заголовка
     const initData = req.headers['x-telegram-initdata'];
-    
+
     // Если заголовок отсутствует, возвращаем ошибку 401
     if (!initData) {
       return res.status(401).json({
@@ -22,52 +16,58 @@ export const authMiddleware = (req, res, next) => {
       });
     }
 
-    // Валидируем initData с использованием BOT_TOKEN из переменных окружения
+    // Получаем токен
     const botToken = process.env.BOT_TOKEN;
     if (!botToken) {
-      throw new Error('BOT_TOKEN is not defined in environment variables');
+      console.error('BOT_TOKEN is missing in env');
+      return res.status(500).json({ error: 'Server configuration error' });
     }
 
     // Проверяем подлинность initData
-    const isValid = validate(initData, botToken, { expiresIn: 3600 }); // Действителен в течение 1 часа
-    
-    if (!isValid) {
-      return res.status(401).json({
-        error: 'Unauthorized: Invalid init data'
-      });
+    // ВАЖНО: validate выбрасывает ошибку, если данные неверны, поэтому оборачиваем в try/catch или проверяем результат
+    try {
+        validate(initData, botToken, { expiresIn: 3600 });
+    } catch (e) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid init data signature' });
     }
 
-    // Парсим initData, чтобы получить данные пользователя
-    // Извлекаем параметры из строки инициализации
+    // Парсим данные пользователя вручную из строки
     const params = new URLSearchParams(initData);
     const userParam = params.get('user');
-    
+
     if (!userParam) {
       return res.status(401).json({
         error: 'Unauthorized: User data not found in init data'
       });
     }
 
-    // Декодируем JSON с данными пользователя
     const userData = JSON.parse(decodeURIComponent(userParam));
-    const tgId = parseInt(userData.id);
+    const tgId = userData.id;
 
-    // Получаем данные пользователя из базы данных
-    const user = dbManager.getUserById(tgId);
-    
-    if (!user) {
-      return res.status(401).json({
-        error: 'Unauthorized: User not found in database'
-      });
+    // 1. Пытаемся найти пользователя в нашей БД
+    // Используем правильный метод из нового database.js
+    const dbUser = database.getUserByTgId(tgId);
+
+    if (dbUser) {
+      // Если пользователь есть в базе — прикрепляем его полные данные
+      req.user = dbUser;
+    } else {
+      // 2. Если пользователя НЕТ в базе (он новый)
+      // Мы НЕ должны блокировать его ошибкой 401.
+      // Мы передаем данные из Telegram, чтобы контроллер (index.js) мог его создать.
+      req.user = {
+        tg_id: tgId,
+        username: userData.username,
+        first_name: userData.first_name,
+        is_new: true // Флаг, что это новичок
+      };
     }
 
-    // Прикрепляем данные пользователя к объекту запроса
-    req.user = user;
-
-    // Переходим к следующему middleware
+    // Переходим к следующему обработчику
     next();
+
   } catch (error) {
-    console.error('Authentication error:', error.message);
+    console.error('Authentication error:', error);
     return res.status(401).json({
       error: 'Unauthorized: Authentication failed',
       details: error.message

@@ -4,18 +4,16 @@ import { Telegraf } from 'telegraf';
 import cors from 'cors';
 import helmet from 'helmet';
 import bodyParser from 'body-parser';
-import axios from 'axios';
-import Database from 'better-sqlite3';
 import { validate } from '@telegram-apps/init-data-node';
 import { v4 as uuidv4 } from 'uuid';
-import dbManager from './db.js';
+
+// ИМПОРТИРУЕМ ТОЛЬКО НОВЫЙ МОДУЛЬ БД
 import database from './database.js';
 import { authMiddleware } from './middleware/authMiddleware.js';
 
 // Инициализация сервисов
 let xuiService = null;
 
-// Функция для динамического импорта и инициализации XUI сервиса
 async function initializeXuiService() {
   try {
     const { default: XuiServiceClass } = await import('./services/xuiService.js');
@@ -26,36 +24,23 @@ async function initializeXuiService() {
   }
 }
 
-// Инициализация Express приложения
 const app = express();
 const port = process.env.PORT || 3000;
-
-// Инициализация базы данных
-const db = new Database('database.db');
-db.pragma('journal_mode = WAL');
 
 // Настройка безопасности
 app.use(helmet());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Конфигурация CORS для Telegram Mini Apps
+// Конфигурация CORS
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    
     const allowedOrigins = [
-      'https://web.telegram.org',
-      'https://telegram.org',
-      'https://t.me',
-      'https://*.t.me',
-      'https://miniapp.telegram.org',
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:5173'
+      'https://web.telegram.org', 'https://telegram.org', 'https://t.me',
+      'https://*.t.me', 'https://miniapp.telegram.org',
+      'http://localhost:3000', 'http://127.0.0.1:3000'
     ];
-    
     const isAllowed = allowedOrigins.some(pattern => {
       if (pattern.startsWith('https://*.')) {
         const domain = pattern.substring(9);
@@ -64,136 +49,40 @@ app.use(cors({
         return origin === pattern || (pattern.includes('*') && new RegExp(`^${pattern.replace(/\*/g, '.*')}$`).test(origin));
       }
     });
-    
     callback(null, isAllowed);
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Origin', 'X-Requested-With', 'Content-Type', 'Accept',
-    'Authorization', 'X-Total-Count', 'X-Api-Key', 'X-Telegram-InitData'
-  ]
+  credentials: true
 }));
 
 // Инициализация Telegram бота
 const botToken = process.env.BOT_TOKEN;
 let bot = null;
 
-if (!botToken) {
-  console.warn('BOT_TOKEN не установлен в .env файле. Функционал бота отключен.');
-} else {
+if (botToken) {
   bot = new Telegraf(botToken);
-
-  // Команды бота
-  bot.command('start', (ctx) => {
-    ctx.reply('Добро пожаловать в VPN Subscription Service! Используйте /help для просмотра команд.');
-  });
-
-  bot.command('help', (ctx) => {
-    ctx.reply('Доступные команды:\n/start - Запустить бота\n/help - Показать это сообщение\n/status - Проверить статус подписки\n/health - Проверить работоспособность сервера');
-  });
-
-  bot.command('status', (ctx) => {
-    ctx.reply('Проверка вашей подписки...');
-    // Здесь будет логика проверки через базу данных
-    ctx.reply('Ваша VPN подписка активна!');
-  });
-
-  bot.command('health', (ctx) => {
-    ctx.reply('Сервер работает в штатном режиме (ESM Mode).');
-  });
-
-  // Webhook callback для обновлений бота
+  bot.command('start', (ctx) => ctx.reply('Добро пожаловать в VPN Service!'));
+  
   app.post(`/bot${botToken}`, (req, res) => {
     bot.handleUpdate(req.body, res);
   });
 }
 
-/**
- * Валидация данных инициализации Telegram
- * @param {string} initData - Строка данных инициализации
- */
-function validateTelegramInitData(initData) {
-  if (!botToken) return false;
-  try {
-    validate(initData, botToken);
-    return true;
-  } catch (e) {
-    console.error('Ошибка валидации initData:', e.message);
-    return false;
-  }
-}
+// === API Routes ===
 
-// API Роуты
-app.post('/api/subscribe', async (req, res) => {
-  try {
-    const { user_id, username } = req.body;
-    
-    const initData = req.headers['x-telegram-initdata'];
-    if (initData) {
-      const isValid = validateTelegramInitData(decodeURIComponent(initData));
-      if (!isValid) {
-        return res.status(400).json({
-          message: 'Неверные данные инициализации Telegram'
-        });
-      }
-    }
-    
-    // Эмуляция подписки
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    res.status(200).json({
-      message: `Пользователь ${username || user_id} успешно подписан на VPN сервис!`,
-      user_id,
-      subscription_status: 'active',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Ошибка подписки:', error);
-    res.status(500).json({
-      message: 'Внутренняя ошибка сервера при оформлении подписки'
-    });
-  }
-});
-
-// Эндпоинт проверки здоровья
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', mode: 'ESM', timestamp: new Date().toISOString() });
 });
 
-// Эндпоинт статуса бота
-app.get('/bot-status', (req, res) => {
-  if (botToken) {
-    res.status(200).json({
-      status: 'ACTIVE',
-      message: 'Бот сконфигурирован и запущен',
-      timestamp: new Date().toISOString()
-    });
-  } else {
-    res.status(200).json({
-      status: 'WARNING',
-      message: 'Токен бота не настроен',
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// GET /api/user/me — возвращает данные профиля и статус подписки
+// GET /api/user/me
 app.get('/api/user/me', authMiddleware, (req, res) => {
   try {
-    // Получаем данные пользователя из базы данных
-    const user = dbManager.getUserById(req.user.tg_id);
+    // Используем правильный метод из database.js
+    const user = database.getUserByTgId(req.user.tg_id);
     
-    if (!user) {
-      return res.status(404).json({
-        message: 'Пользователь не найден'
-      });
-    }
+    if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
 
-    // Получаем информацию о подписке
-    const subscription = dbManager.getUserSubscription(user.tg_id);
+    const subscription = database.getUserSubscription(user.tg_id);
 
-    // Возвращаем данные пользователя с информацией о подписке
     res.status(200).json({
       user: {
         id: user.tg_id,
@@ -202,201 +91,22 @@ app.get('/api/user/me', authMiddleware, (req, res) => {
         balance: user.balance,
         created_at: user.created_at
       },
-      subscription: subscription || {
-        status: 'expired',
-        expires_at: null,
-        vpn_config_url: null
-      },
-      timestamp: new Date().toISOString()
+      subscription: subscription || { status: 'expired', expires_at: null, vpn_config_url: null }
     });
   } catch (error) {
-    console.error('Ошибка получения данных пользователя:', error);
-    res.status(500).json({
-      message: 'Внутренняя ошибка сервера при получении данных пользователя'
-    });
+    console.error('Ошибка:', error);
+    res.status(500).json({ message: 'Server Error' });
   }
 });
 
-// POST /api/subscription/activate — логика покупки: проверка баланса -> запрос к 3X-UI -> сохранение ключа в БД -> возврат конфига
-app.post('/api/subscription/activate', authMiddleware, async (req, res) => {
-  try {
-    const { price = 100 } = req.body; // по умолчанию цена 100 единиц
-    
-    // Получаем данные пользователя из базы данных
-    const user = dbManager.getUserById(req.user.tg_id);
-    
-    if (!user) {
-      return res.status(404).json({
-        message: 'Пользователь не найден'
-      });
-    }
-
-    // Проверяем баланс пользователя
-    if (user.balance < price) {
-      return res.status(400).json({
-        message: 'Недостаточно средств для активации подписки',
-        current_balance: user.balance,
-        required_amount: price
-      });
-    }
-
-    // Обновляем баланс пользователя (списание средств)
-    const updateUserStmt = dbManager.db.prepare(
-      'UPDATE users SET balance = balance - ? WHERE tg_id = ?'
-    );
-    updateUserStmt.run(price, user.tg_id);
-
-    // Обновляем данные пользователя
-    const updatedUser = dbManager.getUserById(user.tg_id);
-
-    try {
-      // Асинхронно инициализируем XUI сервис, если он еще не инициализирован
-      if (!xuiService) {
-        xuiService = await initializeXuiService();
-      }
-
-      // Проверяем, доступен ли XUI сервис
-      if (!xuiService) {
-        // Если XUI сервис недоступен, создаем только запись в базе данных с mock данными
-        const uuid = crypto.randomUUID ? crypto.randomUUID() : generateUUID();
-        
-        // Сохраняем информацию о подписке в базе данных
-        const insertSubscriptionStmt = dbManager.db.prepare(`
-          INSERT INTO subscriptions (user_id, status, expires_at, vpn_key_id, vpn_config_url)
-          VALUES (?, ?, ?, ?, ?)
-        `);
-        
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // Пример: 30 дней
-        insertSubscriptionStmt.run(
-          user.tg_id,
-          'active',
-          expiresAt,
-          uuid, // сохраняем UUID как vpn_key_id
-          null // нет конфигурации без XUI сервиса
-        );
-
-        // Возвращаем успешный ответ с информацией о подписке
-        res.status(200).json({
-          message: 'Подписка успешно активирована',
-          user: {
-            id: updatedUser.tg_id,
-            username: updatedUser.username,
-            first_name: updatedUser.first_name,
-            balance: updatedUser.balance
-          },
-          subscription: {
-            status: 'active',
-            expires_at: expiresAt,
-            vpn_key_id: uuid,
-            vpn_config_url: null
-          },
-          timestamp: new Date().toISOString(),
-          warning: 'XUI сервис недоступен - подписка создана в локальной базе, но не в VPN провайдере'
-        });
-        return;
-      }
-
-      // Создаем уникальный email для клиента в формате: tg_username_timestamp
-      const clientEmail = `${user.username || 'user'}_${Date.now()}@vpn.example`;
-      
-      // Генерируем UUID для клиента
-      const uuid = crypto.randomUUID ? crypto.randomUUID() : generateUUID();
-      
-      // Подготавливаем данные для создания клиента в 3X-UI
-      // Используем произвольный inbound ID для демонстрации (в реальной системе нужно использовать реальный inbound ID)
-      const inboundId = process.env.XUI_INBOUND_ID || 1; // по умолчанию используем первый inbound
-      
-      const clientData = {
-        email: clientEmail,
-        uuid: uuid,
-        flow: '', // можно задать определенный flow если требуется
-        upload: 0,
-        download: 0,
-        total: 0, // можно задать лимит трафика если требуется
-        expiryTime: 0 // можно задать дату истечения подписки в миллисекундах
-      };
-
-      // Создаем клиента в 3X-UI
-      const createdClient = await xuiService.createClient(clientData, parseInt(inboundId));
-
-      // Получаем конфигурацию для клиента
-      const configs = await xuiService.getClientConfigs();
-      const userConfig = configs.find(config => config.includes(clientEmail));
-      
-      // Сохраняем информацию о подписке в базе данных
-      const insertSubscriptionStmt = dbManager.db.prepare(`
-        INSERT INTO subscriptions (user_id, status, expires_at, vpn_key_id, vpn_config_url)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // Пример: 30 дней
-      insertSubscriptionStmt.run(
-        user.tg_id,
-        'active',
-        expiresAt,
-        uuid, // сохраняем UUID как vpn_key_id
-        userConfig || null // сохраняем конфигурацию если удалось получить
-      );
-
-      // Возвращаем успешный ответ с конфигурацией и информацией о подписке
-      res.status(200).json({
-        message: 'Подписка успешно активирована',
-        user: {
-          id: updatedUser.tg_id,
-          username: updatedUser.username,
-          first_name: updatedUser.first_name,
-          balance: updatedUser.balance
-        },
-        subscription: {
-          status: 'active',
-          expires_at: expiresAt,
-          vpn_key_id: uuid,
-          vpn_config_url: userConfig
-        },
-        timestamp: new Date().toISOString()
-      });
-    } catch (xuiError) {
-      console.error('Ошибка при работе с 3X-UI:', xuiError);
-      
-      // В случае ошибки при работе с 3X-UI, возвращаем средства пользователю
-      const refundStmt = dbManager.db.prepare(
-        'UPDATE users SET balance = balance + ? WHERE tg_id = ?'
-      );
-      refundStmt.run(price, user.tg_id);
-      
-      return res.status(500).json({
-        message: 'Ошибка при активации подписки в VPN сервисе',
-        error: xuiError.message
-      });
-    }
-  } catch (error) {
-    console.error('Ошибка активации подписки:', error);
-    res.status(500).json({
-      message: 'Внутренняя ошибка сервера при активации подписки'
-    });
-  }
-});
-
-/**
- * GET /api/vpn/key - Получение или создание ключа VPN для пользователя
- * Принимает Telegram ID пользователя, проверяет наличие ключа в базе данных,
- * если ключа нет - создает нового клиента в 3X-UI через API.
- * Возвращает HTTPS-ссылку на подписку.
- */
+// GET /api/vpn/key (ГЛАВНЫЙ ЭНДПОИНТ)
 app.get('/api/vpn/key', authMiddleware, async (req, res) => {
   try {
     const { tg_id } = req.user;
-    
-    if (!tg_id) {
-      return res.status(400).json({
-        message: 'Отсутствует Telegram ID пользователя'
-      });
-    }
+    if (!tg_id) return res.status(400).json({ message: 'No TG ID' });
 
-    // Получаем пользователя из базы данных
+    // 1. Получаем или создаем юзера
     let user = database.getUserByTgId(tg_id);
-    
-    // Если пользователя нет в базе, создаем его
     if (!user) {
       user = database.upsertUser({
         tg_id,
@@ -405,205 +115,76 @@ app.get('/api/vpn/key', authMiddleware, async (req, res) => {
       });
     }
 
-    // Проверяем, есть ли активный VPN клиент у пользователя
+    // 2. Проверяем, есть ли уже ключ
     const activeClient = database.getActiveVpnClientByUserId(user.id);
-    
     if (activeClient) {
-      // Клиент уже существует, возвращаем существующую конфигурацию
       return res.status(200).json({
         message: 'VPN ключ уже существует',
         status: 'existing',
-        user: {
-          tg_id: user.tg_id,
-          username: user.username,
-          uuid: user.uuid
-        },
-        vpn_client: {
-          uuid: activeClient.uuid,
-          status: activeClient.status,
-          config_url: activeClient.config_url,
-          created_at: activeClient.created_at
-        },
-        timestamp: new Date().toISOString()
+        vpn_client: activeClient
       });
     }
 
-    // Если XUI сервис недоступен, создаем только запись в локальной базе
-    if (!xuiService) {
-      xuiService = await initializeXuiService();
+    // 3. Если ключа нет — пытаемся создать через XUI
+    if (!xuiService) xuiService = await initializeXuiService();
+
+    // Генерируем UUID
+    const clientUuid = uuidv4();
+    const clientEmail = `tg_${user.tg_id}_${Date.now()}@vpn.service`;
+    
+    // Формируем ссылку подписки
+    // ВАЖНО: Берем настройки из ENV, которые мы добавляли ранее
+    const subDomain = process.env.SUB_DOMAIN || 'jsstudy.xyz';
+    const subPort = process.env.SUB_PORT || '2096';
+    const subPath = process.env.SUB_PATH || '/sub/';
+    const subProtocol = process.env.SUB_PROTOCOL || 'https';
+    
+    // Итоговая ссылка: https://jsstudy.xyz:2096/sub/UUID
+    const finalConfigUrl = `${subProtocol}://${subDomain}:${subPort}${subPath}${clientUuid}`;
+
+    if (xuiService) {
+      try {
+        const inboundId = process.env.XUI_INBOUND_ID || 1;
+        await xuiService.createClient({
+          email: clientEmail,
+          uuid: clientUuid,
+          enable: true
+        }, parseInt(inboundId));
+        
+        console.log(`✅ Клиент создан в панели: ${clientUuid}`);
+      } catch (e) {
+        console.error('⚠️ Ошибка XUI, создаем локально:', e.message);
+      }
     }
 
-    if (!xuiService) {
-      // XUI сервис недоступен, создаем клиента только в локальной базе
-      const clientUuid = uuidv4();
-      const vpnClient = database.createVpnClient({
-        user_id: user.id,
-        uuid: clientUuid,
-        email: `tg_${user.tg_id}_${Date.now()}@vpn.local`,
-        status: 'active',
-        config_url: null
-      });
+    // 4. Сохраняем в базу
+    const vpnClient = database.createVpnClient({
+      user_id: user.id,
+      uuid: clientUuid,
+      email: clientEmail,
+      status: 'active',
+      config_url: finalConfigUrl // Сохраняем правильную HTTPS ссылку
+    });
 
-      return res.status(200).json({
-        message: 'VPN ключ создан в локальной базе (3X-UI сервис недоступен)',
-        status: 'created_local',
-        user: {
-          tg_id: user.tg_id,
-          username: user.username,
-          uuid: user.uuid
-        },
-        vpn_client: {
-          uuid: vpnClient.uuid,
-          status: vpnClient.status,
-          config_url: vpnClient.config_url,
-          created_at: vpnClient.created_at
-        },
-        warning: '3X-UI сервис недоступен - клиент создан только в локальной базе',
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Создаем клиента в 3X-UI
-    try {
-      // Генерируем UUID для клиента
-      const clientUuid = uuidv4();
-      
-      // Подготавливаем данные клиента для 3X-UI
-      const clientEmail = `tg_${user.tg_id}_${Date.now()}@vpn.service`;
-      const inboundId = process.env.XUI_INBOUND_ID || 1;
-      
-      const clientData = {
-        email: clientEmail,
-        uuid: clientUuid,
-        flow: '',
-        upload: 0,
-        download: 0,
-        total: 0,
-        expiryTime: 0,
-        enable: true,
-        remarks: `Telegram user: ${user.username || user.tg_id}`
-      };
-
-      // Создаем клиента в 3X-UI
-      const createdClient = await xuiService.createClient(clientData, parseInt(inboundId));
-      
-      // Получаем конфигурацию для клиента
-      const configs = await xuiService.getClientConfigs();
-      const userConfig = configs.find(config => config.includes(clientEmail)) ||
-                       `https://${process.env.XUI_BASE_URL || 'example.com'}/api/vpn/config/${clientUuid}`;
-      
-      // Сохраняем клиента в локальной базе
-      const vpnClient = database.createVpnClient({
-        user_id: user.id,
-        uuid: clientUuid,
-        email: clientEmail,
-        xui_client_id: createdClient.id || clientUuid,
-        inbound_id: inboundId,
-        status: 'active',
-        config_url: userConfig
-      });
-
-      // Возвращаем успешный ответ с конфигурацией
-      return res.status(200).json({
-        message: 'VPN ключ успешно создан',
-        status: 'created',
-        user: {
-          tg_id: user.tg_id,
-          username: user.username,
-          uuid: user.uuid
-        },
-        vpn_client: {
-          uuid: vpnClient.uuid,
-          status: vpnClient.status,
-          config_url: vpnClient.config_url,
-          created_at: vpnClient.created_at
-        },
-        config_url: vpnClient.config_url,
-        timestamp: new Date().toISOString()
-      });
-
-    } catch (xuiError) {
-      console.error('Ошибка при создании клиента в 3X-UI:', xuiError);
-      
-      // Создаем клиента только в локальной базе при ошибке 3X-UI
-      const clientUuid = uuidv4();
-      const vpnClient = database.createVpnClient({
-        user_id: user.id,
-        uuid: clientUuid,
-        email: `tg_${user.tg_id}_${Date.now()}@vpn.fallback`,
-        status: 'active',
-        config_url: null
-      });
-
-      return res.status(200).json({
-        message: 'VPN ключ создан в локальной базе (ошибка 3X-UI)',
-        status: 'created_fallback',
-        user: {
-          tg_id: user.tg_id,
-          username: user.username,
-          uuid: user.uuid
-        },
-        vpn_client: {
-          uuid: vpnClient.uuid,
-          status: vpnClient.status,
-          config_url: vpnClient.config_url,
-          created_at: vpnClient.created_at
-        },
-        warning: `3X-UI сервис вернул ошибку: ${xuiError.message}`,
-        timestamp: new Date().toISOString()
-      });
-    }
+    return res.status(200).json({
+      message: 'VPN ключ успешно создан',
+      status: 'created',
+      vpn_client: vpnClient,
+      config_url: finalConfigUrl
+    });
 
   } catch (error) {
-    console.error('Ошибка получения/создания VPN ключа:', error);
-    res.status(500).json({
-      message: 'Внутренняя ошибка сервера при получении VPN ключа',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+    console.error('Ошибка /api/vpn/key:', error);
+    res.status(500).json({ message: 'Internal Error', error: error.message });
   }
 });
 
-/**
- * Вспомогательная функция для генерации UUID если не доступна crypto.randomUUID
- * @returns {string} Сгенерированный UUID
- */
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c == 'x' ? r : (r & 0x3 | 0.8);
-    return v.toString(16);
-  });
-}
-
-// Запуск сервера
+// Запуск
 app.listen(port, () => {
-  console.log(`VPN Subscription API сервер запущен на порту ${port} (ESM Mode)`);
-  
-  if (bot && botToken) {
-    bot.launch()
-      .then(() => {
-        console.log('Telegram бот успешно запущен');
-      })
-      .catch((error) => {
-        console.error('Ошибка запуска бота:', error.message);
-      });
-  } else {
-    console.log('Telegram бот не сконфигурирован (отсутствует BOT_TOKEN)');
-  }
+  console.log(`🚀 Server running on port ${port}`);
+  if (bot && botToken) bot.launch();
 });
 
-// Корректное завершение работы
-process.once('SIGINT', () => {
-  if (bot) bot.stop('SIGINT');
-  db.close();
-  console.log('Получен SIGINT, бот остановлен, сервер закрыт.');
-  process.exit(0);
-});
-
-process.once('SIGTERM', () => {
-  if (bot) bot.stop('SIGTERM');
-  db.close();
-  console.log('Получен SIGTERM, бот остановлен, сервер закрыт.');
-  process.exit(0);
-});
+// Graceful stop
+process.once('SIGINT', () => { if (bot) bot.stop('SIGINT'); database.close(); process.exit(0); });
+process.once('SIGTERM', () => { if (bot) bot.stop('SIGTERM'); database.close(); process.exit(0); });
