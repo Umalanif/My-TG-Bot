@@ -9,6 +9,7 @@ const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 
+// 1. Инициализация таблиц
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +28,7 @@ db.exec(`
     uuid TEXT NOT NULL UNIQUE,
     email TEXT,
     xui_client_id TEXT,
-    inbound_id INTEGER, -- Вот это поле нам нужно заполнить
+    inbound_id INTEGER,
     status TEXT DEFAULT 'active',
     total_traffic INTEGER DEFAULT 0,
     upload INTEGER DEFAULT 0,
@@ -40,6 +41,15 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users (id)
   );
 `);
+
+// 2. ДОБАВЛЕНИЕ КОЛОНКИ (Если база уже существовала)
+// Это гарантирует, что поле появится в таблице без удаления данных
+try {
+  db.exec("ALTER TABLE users ADD COLUMN referred_by INTEGER;");
+  console.log("✅ База данных обновлена: добавлена колонка referred_by");
+} catch (e) {
+  // Ошибка возникнет, если колонка уже есть. Это нормально, просто идем дальше.
+}
 
 const database = {
   getOrCreateUser: ({ tg_id, username, first_name }) => {
@@ -57,19 +67,27 @@ const database = {
 
   getUserByTgId: (tg_id) => db.prepare('SELECT * FROM users WHERE tg_id = ?').get(tg_id),
 
+  // Привязать реферера (только один раз при регистрации)
+  setReferrer: (tg_id, referrer_tg_id) => {
+    return db.prepare('UPDATE users SET referred_by = ? WHERE tg_id = ? AND referred_by IS NULL')
+             .run(referrer_tg_id, tg_id);
+  },
+
+  // Получение количества приглашенных
+  getReferralStats: (tg_id) => {
+    return db.prepare('SELECT COUNT(*) as count FROM users WHERE referred_by = ?').get(tg_id);
+  },
+
   getActiveVpnClientByUserId: (user_id) => {
     return db.prepare("SELECT * FROM vpn_clients WHERE user_id = ? AND status = 'active'").get(user_id);
   },
 
-  // ИСПРАВИЛИ ЭТОТ МЕТОД: теперь он принимает inbound_id
   createVpnClient: ({ user_id, uuid, email, status, config_url, inbound_id }) => {
     const stmt = db.prepare(`
       INSERT INTO vpn_clients (user_id, uuid, email, status, config_url, inbound_id)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    // Передаем inbound_id в запрос
     const info = stmt.run(user_id, uuid, email, status || 'active', config_url, inbound_id || 0);
-    
     return db.prepare('SELECT * FROM vpn_clients WHERE id = ?').get(info.lastInsertRowid);
   },
 
@@ -78,7 +96,7 @@ const database = {
     if (!user) return null;
     return db.prepare('SELECT * FROM vpn_clients WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get(user.id);
   },
-  
+
   close: () => db.close()
 };
 
