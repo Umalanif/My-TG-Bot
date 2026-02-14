@@ -87,13 +87,16 @@ class XuiService {
     const subId = this.generateSubId(); // Короткий ID
     const email = `user_${tgId}_${Date.now()}`;
 
+    // Высчитываем 72 часа от текущего времени в миллисекундах
+    const expiryTimeMs = Date.now() + (72 * 60 * 60 * 1000);
+
     // 2. Данные для панели
     const clientPayload = {
       id: uuid,
       email: email,
       limitIp: 2,
       totalGB: 0,
-      expiryTime: 0,
+      expiryTime: expiryTimeMs,
       enable: true,
       tgId: tgId.toString(),
       subId: subId, // Передаем subId в панель
@@ -120,7 +123,8 @@ class XuiService {
         configUrl: publicUrl,
         uuid: uuid,
         email: email,
-        subId: subId
+        subId: subId,
+        expiryTime: expiryTimeMs
       };
 
     } catch (error) {

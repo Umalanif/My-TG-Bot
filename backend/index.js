@@ -230,7 +230,8 @@ app.get('/vpn/key', authMiddleware, async (req, res) => {
         status: 'active',
         config_url: xuiResult.configUrl,
         sub_id: xuiResult.subId,
-        inbound_id: 1
+        inbound_id: 1,
+        expiry_time: xuiResult.expiryTime
       });
       res.json({ vpn_client: vpnClient });
     } catch (e) {

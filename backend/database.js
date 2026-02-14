@@ -82,12 +82,12 @@ const database = {
     return db.prepare("SELECT * FROM vpn_clients WHERE user_id = ? AND status = 'active'").get(user_id);
   },
 
-  createVpnClient: ({ user_id, uuid, email, status, config_url, inbound_id }) => {
+  createVpnClient: ({ user_id, uuid, email, status, config_url, inbound_id, expiry_time }) => {
     const stmt = db.prepare(`
-      INSERT INTO vpn_clients (user_id, uuid, email, status, config_url, inbound_id)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO vpn_clients (user_id, uuid, email, status, config_url, inbound_id, expiry_time)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    const info = stmt.run(user_id, uuid, email, status || 'active', config_url, inbound_id || 0);
+    const info = stmt.run(user_id, uuid, email, status || 'active', config_url, inbound_id || 0, expiry_time || 0);
     return db.prepare('SELECT * FROM vpn_clients WHERE id = ?').get(info.lastInsertRowid);
   },
 

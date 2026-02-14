@@ -85,7 +85,7 @@ function App() {
         setVpnData({
           status: 'active',
           configUrl: data.vpn_client.config_url,
-          expiryDate: data.vpn_client.created_at
+          expiryDate: data.vpn_client.expiry_time
         });
       }
     } catch (error) {
@@ -149,7 +149,7 @@ function App() {
               </div>
             </div>
             <div style={{textAlign: 'right'}}>
-              <p style={{fontSize:'10px', color: 'var(--text-gray)'}}>Создан</p>
+              <p style={{fontSize:'10px', color: 'var(--text-gray)'}}>Активно до</p>
               <p style={{fontFamily:'monospace', fontSize:'14px', color: '#d1d5db'}}>
                 {vpnData.expiryDate ? new Date(vpnData.expiryDate).toLocaleDateString() : '--.--.----'}
               </p>
