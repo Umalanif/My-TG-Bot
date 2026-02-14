@@ -5,24 +5,24 @@ import './App.css';
 const API_BASE_URL = '/api';
 
 const LINKS = {
-  // Новые ссылки на клиенты
-  android: 'https://play.google.com/store/apps/details?id=com.v2ray.ang', // v2rayNG
-  ios: 'https://apps.apple.com/us/app/streisand/id6450534064', // Streisand (лучший аналог для iOS)
+  android: 'https://play.google.com/store/apps/details?id=com.v2raytun.android', 
+  ios: 'https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690', 
   
-  // Десктоп оставим как есть или можно заменить на Nekoray, но пока пусть будет Hiddify для ПК (он там неплох)
-  windows: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Windows-Setup-x64.Msix',
-  macos: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-MacOS.dmg',
-  linux: 'https://github.com/hiddify/hiddify-app/releases/latest/download/Hiddify-Linux-x64.AppImage',
+  windows: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-windows-64-desktop.zip',
+  macos: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-macos-64.zip',
+  linux: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-linux-64.zip',
   
   support: 'https://t.me/nexus_vpn_support',
   api_url: `${API_BASE_URL}/vpn/key`
 };
 
 const Icons = {
-  VpnLock: () => <span className="material-icons-round">vpn_lock</span>,
+  VpnLock: () => <span className="material-icons-round earth-blink">vpn_lock</span>,
   Laptop: () => <span className="material-icons-round">laptop_mac</span>,
   ChevronRight: () => <span className="material-icons-round">chevron_right</span>,
-  Rocket: () => <span className="material-icons-round">rocket_launch</span>,
+  
+  Rocket: () => <img src="./v2ray.png" alt="v2ray" style={{width: '28px', height: '28px', objectFit: 'contain'}} />,
+  
   Copy: () => <span className="material-icons-round">content_copy</span>,
   Apple: () => <span className="material-icons-round">apple</span>,
   Android: () => <span className="material-icons-round">android</span>,
@@ -47,8 +47,14 @@ function App() {
   const [isMounted, setIsMounted] = useState(false);
   const [modal, setModal] = useState({ active: false, type: null, step: 1 });
   const [vpnData, setVpnData] = useState({ status: 'loading', configUrl: null, expiryDate: null });
+  const [toast, setToast] = useState('');
 
   const launchData = useMemo(() => getLaunchData(), []);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2500);
+  };
 
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;
@@ -81,12 +87,15 @@ function App() {
       });
       if (!response.ok) throw new Error();
       const data = await response.json();
+      
       if (data.vpn_client) {
         setVpnData({
           status: 'active',
           configUrl: data.vpn_client.config_url,
           expiryDate: data.vpn_client.expiry_time
         });
+      } else {
+        setVpnData({ status: 'no_sub', configUrl: null, expiryDate: null });
       }
     } catch (error) {
       setVpnData({ status: 'error', configUrl: null, expiryDate: null });
@@ -104,15 +113,27 @@ function App() {
     if (type === 'copy_key' && vpnData.configUrl) {
       navigator.clipboard.writeText(vpnData.configUrl);
       if (hapticFeedback.notificationOccurred.isAvailable()) hapticFeedback.notificationOccurred('success');
+      showToast('✅ Скопировано в буфер обмена!');
       return;
     }
 
-    // ЛОГИКА DEEP LINK ДЛЯ V2RAYNG
     if (type === 'deep_connect') {
-      // Формируем ссылку именно для v2rayNG
-      // sub - это подписка. v2rayng://install-sub?url=...&name=...
-      const deepLink = `v2rayng://install-sub?url=${encodeURIComponent(vpnData.configUrl)}&name=NexusVPN`;
-      openLink(deepLink);
+      const platform = window.Telegram?.WebApp?.platform || 'unknown';
+      
+      // Принудительно копируем ключ в буфер перед попыткой открыть приложение
+      try {
+        navigator.clipboard.writeText(vpnData.configUrl);
+      } catch (e) {}
+      
+      if (platform === 'android') {
+        showToast('✅ Скопировано! Открываем V2rayTun...');
+        openLink(`v2raytun://install-sub?url=${encodeURIComponent(vpnData.configUrl)}&name=NexusVPN`);
+      } else if (platform === 'ios') {
+        showToast('✅ Скопировано! Открываем V2Box...');
+        openLink(`v2box://install-sub?url=${encodeURIComponent(vpnData.configUrl)}&name=NexusVPN`);
+      } else {
+        showToast('🔗 Скопировано! Откройте клиент и нажмите Ctrl+V');
+      }
       return;
     }
 
@@ -125,7 +146,46 @@ function App() {
 
   return (
     <div className="app-container">
+      <style>{`
+        @keyframes earthBlink {
+          0% { opacity: 1; filter: drop-shadow(0 0 5px #38bdf8); }
+          50% { opacity: 0.7; filter: drop-shadow(0 0 15px #38bdf8); transform: scale(1.05); color: #38bdf8; }
+          100% { opacity: 1; filter: drop-shadow(0 0 5px #38bdf8); }
+        }
+        .earth-blink {
+          animation: earthBlink 2.5s infinite ease-in-out;
+          color: #0ea5e9;
+        }
+        
+        /* Стили для всплывающего уведомления (Тоста) */
+        .toast-message {
+          position: fixed;
+          bottom: 30px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(0, 0, 0, 0.85);
+          color: #fff;
+          padding: 12px 24px;
+          border-radius: 20px;
+          font-size: 13px;
+          font-weight: 500;
+          z-index: 9999;
+          white-space: nowrap;
+          border: 1px solid rgba(255,255,255,0.1);
+          animation: fadeInOut 2.5s forwards;
+        }
+        @keyframes fadeInOut {
+          0% { opacity: 0; bottom: 10px; }
+          15% { opacity: 1; bottom: 30px; }
+          85% { opacity: 1; bottom: 30px; }
+          100% { opacity: 0; bottom: 40px; }
+        }
+      `}</style>
+
       <div className="scanlines"></div>
+
+      {/* Отрисовка тоста */}
+      {toast && <div className="toast-message">{toast}</div>}
 
       <main className="main-content">
         <header className="header">
@@ -144,7 +204,7 @@ function App() {
               <div>
                 <p className="uppercase bold" style={{fontSize:'10px', color: 'var(--text-gray)'}}>Статус подписки</p>
                 <p className={`font-orbitron bold ${vpnData.status === 'active' ? 'text-primary' : 'text-danger'}`} style={{fontSize:'18px'}}>
-                  {vpnData.status === 'active' ? 'АКТИВЕН' : vpnData.status === 'loading' ? 'ЗАГРУЗКА...' : 'ОШИБКА'}
+                  {vpnData.status === 'active' ? 'АКТИВЕН' : vpnData.status === 'loading' ? 'ЗАГРУЗКА...' : vpnData.status === 'no_sub' ? 'НЕТ ПОДПИСКИ' : 'ОШИБКА'}
                 </p>
               </div>
             </div>
@@ -161,19 +221,20 @@ function App() {
             <h3 className="section-title">Быстрое подключение</h3>
             <div className="hiddify-btn-wrapper">
               <div className="hiddify-inner">
-                  {/* КНОПКА ПОДКЛЮЧЕНИЯ (V2RAYNG) */}
                   <button
                       disabled={!vpnData.configUrl}
                       onClick={() => handleAction('deep_connect')} 
                       className="btn-main-action"
                   >
                       <div className="hiddify-icon">
-                        {/* Иконка ракеты вместо SVG Hiddify */}
                         <Icons.Rocket /> 
                       </div>
                       <div>
                         <div className="bold" style={{fontSize: '16px', lineHeight: '1.2'}}>Подключить</div>
-                        <div style={{fontSize: '11px', color: '#64748b'}}>v2rayNG (Android)</div>
+                        <div style={{fontSize: '11px', color: '#64748b'}}>
+                          {window.Telegram?.WebApp?.platform === 'android' ? 'V2rayTun (Android)' : 
+                           window.Telegram?.WebApp?.platform === 'ios' ? 'V2Box (iOS)' : 'ПК (Копировать)'}
+                        </div>
                       </div>
                   </button>
                   <div className="divider-vertical"></div>
@@ -237,7 +298,7 @@ function App() {
                         <Icons.Android /> 
                         <div>
                           <div className="bold">Google Play</div>
-                          <div style={{fontSize: '10px', color: '#888'}}>Скачать v2rayNG</div>
+                          <div style={{fontSize: '10px', color: '#888'}}>Скачать V2rayTun</div>
                         </div>
                       </div>
                     </button>
@@ -246,7 +307,7 @@ function App() {
                         <Icons.Apple /> 
                         <div>
                           <div className="bold">App Store</div>
-                          <div style={{fontSize: '10px', color: '#888'}}>Скачать Streisand</div>
+                          <div style={{fontSize: '10px', color: '#888'}}>Скачать V2Box</div>
                         </div>
                       </div>
                     </button>
@@ -287,9 +348,8 @@ function App() {
                     </div>
                  </button>
                  
-                 {/* Краткая инструкция, чтобы не тупили */}
                  <div style={{background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', fontSize: '12px', marginTop: '5px'}}>
-                    <span style={{color: '#fbbf24'}}>⚠️ Важно:</span> После добавления, если список пуст — нажмите <span className="bold">"Обновить подписку"</span> (три точки сверху).
+                    <span style={{color: '#fbbf24'}}>⚠️ Важно:</span> После добавления, если список пуст — нажмите <span className="bold">"Обновить подписку"</span>.
                  </div>
 
                  <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>

@@ -42,14 +42,17 @@ db.exec(`
   );
 `);
 
-// 2. ДОБАВЛЕНИЕ КОЛОНКИ (Если база уже существовала)
-// Это гарантирует, что поле появится в таблице без удаления данных
+// 2. ОБНОВЛЕНИЯ БАЗЫ ДАННЫХ (Добавление колонок)
 try {
   db.exec("ALTER TABLE users ADD COLUMN referred_by INTEGER;");
-  console.log("✅ База данных обновлена: добавлена колонка referred_by");
-} catch (e) {
-  // Ошибка возникнет, если колонка уже есть. Это нормально, просто идем дальше.
-}
+  console.log("✅ База данных: добавлена колонка referred_by");
+} catch (e) {}
+
+try {
+  db.exec("ALTER TABLE vpn_clients ADD COLUMN notification_step INTEGER DEFAULT 0;");
+  console.log("✅ База данных: добавлена колонка notification_step (для авторассылки)");
+} catch (e) {}
+
 
 const database = {
   getOrCreateUser: ({ tg_id, username, first_name }) => {
@@ -65,15 +68,17 @@ const database = {
     return user;
   },
 
+  getAllUsers: () => {
+    return db.prepare('SELECT * FROM users').all();
+  },
+
   getUserByTgId: (tg_id) => db.prepare('SELECT * FROM users WHERE tg_id = ?').get(tg_id),
 
-  // Привязать реферера (только один раз при регистрации)
   setReferrer: (tg_id, referrer_tg_id) => {
     return db.prepare('UPDATE users SET referred_by = ? WHERE tg_id = ? AND referred_by IS NULL')
              .run(referrer_tg_id, tg_id);
   },
 
-  // Получение количества приглашенных
   getReferralStats: (tg_id) => {
     return db.prepare('SELECT COUNT(*) as count FROM users WHERE referred_by = ?').get(tg_id);
   },
@@ -84,8 +89,8 @@ const database = {
 
   createVpnClient: ({ user_id, uuid, email, status, config_url, inbound_id, expiry_time }) => {
     const stmt = db.prepare(`
-      INSERT INTO vpn_clients (user_id, uuid, email, status, config_url, inbound_id, expiry_time)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO vpn_clients (user_id, uuid, email, status, config_url, inbound_id, expiry_time, notification_step)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0)
     `);
     const info = stmt.run(user_id, uuid, email, status || 'active', config_url, inbound_id || 0, expiry_time || 0);
     return db.prepare('SELECT * FROM vpn_clients WHERE id = ?').get(info.lastInsertRowid);
@@ -95,6 +100,10 @@ const database = {
     const user = db.prepare('SELECT id FROM users WHERE tg_id = ?').get(tg_id);
     if (!user) return null;
     return db.prepare('SELECT * FROM vpn_clients WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get(user.id);
+  },
+
+  updateNotificationStep: (client_id, step) => {
+    db.prepare('UPDATE vpn_clients SET notification_step = ? WHERE id = ?').run(step, client_id);
   },
 
   close: () => db.close()
