@@ -1,39 +1,47 @@
+import 'dotenv/config';
 import axios from 'axios';
+import crypto from 'crypto';
 
-/**
- * Сервис для интеграции с 3X-UI панелью
- */
 class XuiService {
   constructor() {
-    this.baseUrl = process.env.XUI_BASE_URL; // https://jsstudy.xyz:1337
-    this.basePath = process.env.XUI_BASE_PATH || '/'; // /GfWRVC18J5m2Y3U317/
+    this.baseUrl = process.env.XUI_BASE_URL;
+    // Возвращаем поддержку BASE_PATH (если у тебя панель не в корне)
+    this.basePath = process.env.XUI_BASE_PATH || '/'; 
     this.username = process.env.XUI_USERNAME;
     this.password = process.env.XUI_PASSWORD;
-    
+
+    // Жестко прописываем домен для подписки (как договаривались)
+    this.publicDomain = 'https://jsstudy.xyz:2096'; 
+
     if (!this.baseUrl || !this.username || !this.password) {
-      throw new Error('Отсутствуют обязательные переменные окружения для подключения к 3X-UI');
+      console.error('❌ [XUI ERROR] ПЕРЕМЕННЫЕ НЕ НАЙДЕНЫ В .ENV!');
     }
 
-    // Правильно склеиваем URL с учетом секретного пути и убираем лишние слеши
-    const cleanBasePath = this.basePath.startsWith('/') ? this.basePath : `/${this.basePath}`;
-    const fullUrl = `${this.baseUrl}${cleanBasePath}`.replace(/\/+$/, '');
+    // Правильная сборка URL (как было у тебя раньше)
+    const cleanPath = this.basePath.startsWith('/') ? this.basePath : `/${this.basePath}`;
+    // Убираем двойные слэши, но оставляем http://
+    const fullUrl = `${this.baseUrl}${cleanPath}`.replace(/([^:]\/)\/+/g, "$1");
+
+    console.log(`[XUI DEBUG] Бот будет стучаться сюда: ${fullUrl}`); // <-- СМОТРИ В ЛОГИ СЮДА
 
     this.apiClient = axios.create({
       baseURL: fullUrl,
       timeout: 10000,
       headers: { 'Content-Type': 'application/json' },
     });
-    
     this.authenticatedClient = null;
-    this.sessionCookie = null;
   }
 
-  /**
-   * Метод аутентификации
-   */
+  // Генерация случайного subId (16 символов)
+  generateSubId() {
+    return crypto.randomBytes(8).toString('hex');
+  }
+
   async authenticate() {
     try {
-      // Запрос пойдет на BASE_URL + BASE_PATH + /login
+      // Пытаемся залогиниться
+      console.log(`[XUI DEBUG] Пробую логин по адресу: ${this.apiClient.defaults.baseURL}login`);
+      
       const response = await this.apiClient.post('/login', {
         username: this.username,
         password: this.password
@@ -41,83 +49,90 @@ class XuiService {
 
       if (response.data.success) {
         const cookies = response.headers['set-cookie'];
-        if (cookies) {
-          // Ищем именно куку сессии
-          this.sessionCookie = cookies.find(c => c.includes('3x-ui'));
-        }
+        let sessionCookie = cookies?.find(c => c.includes('3x-ui') || c.includes('session'));
         
+        if (!sessionCookie && cookies && cookies.length > 0) {
+            sessionCookie = cookies[0];
+        }
+
         this.authenticatedClient = axios.create({
           baseURL: this.apiClient.defaults.baseURL,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cookie': this.sessionCookie || '',
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Cookie': sessionCookie || '' 
           },
         });
-
-        console.log('✅ [XUI] Успешная аутентификация');
+        console.log('✅ [XUI] Авторизация успешна');
         return true;
-      } else {
-        throw new Error(response.data.msg || 'Ошибка аутентификации');
       }
-    } catch (error) {
-      console.error('❌ [XUI] Ошибка логина:', error.message);
+      return false;
+    } catch (e) {
+      console.error(`❌ [XUI] Ошибка логина: ${e.message}`);
+      // Если 404 - значит адрес неверный
+      if (e.response && e.response.status === 404) {
+          console.error('⚠️ ПРОВЕРЬ .ENV: Бот стучится не туда. Проверь XUI_BASE_URL и XUI_BASE_PATH');
+      }
       return false;
     }
   }
 
-  /**
-   * Проверка и обновление сессии
-   */
-  async _ensureAuthenticated() {
+  async createClient(tgId) {
     if (!this.authenticatedClient) {
-      const success = await this.authenticate();
-      if (!success) throw new Error('Не удалось авторизоваться в 3X-UI');
+        const success = await this.authenticate();
+        if (!success) throw new Error('Не удалось авторизоваться в панели');
     }
-  }
 
-  /**
-   * Создает нового клиента (VLESS/VMess/etc)
-   */
-  async createClient(clientData, inboundId) {
+    // 1. Генерируем данные
+    const uuid = crypto.randomUUID();
+    const subId = this.generateSubId(); // Короткий ID
+    const email = `user_${tgId}_${Date.now()}`;
+
+    // 2. Данные для панели
+    const clientPayload = {
+      id: uuid,
+      email: email,
+      limitIp: 2,
+      totalGB: 0,
+      expiryTime: 0,
+      enable: true,
+      tgId: tgId.toString(),
+      subId: subId, // Передаем subId в панель
+      flow: "",
+    };
+
     try {
-      await this._ensureAuthenticated();
+      // 3. Отправляем в панель (ID подключения = 1, проверь в панели!)
+      const inboundId = 2; 
 
-      // В 3X-UI API добавление клиента идет через этот эндпоинт
-      // settings должен быть JSON-строкой внутри объекта
-      const response = await this.authenticatedClient.post('/panel/api/inbounds/addClient', {
+      await this.authenticatedClient.post('/panel/api/inbounds/addClient', {
         id: inboundId,
         settings: JSON.stringify({
-          clients: [{
-            id: clientData.uuid,
-            email: clientData.email,
-            enable: true,
-            expiryTime: 0,
-            totalGB: 0,
-            alterId: 0 // для VMess
-          }]
+          clients: [clientPayload]
         })
       });
 
-      if (response.data.success) {
-        return response.data.obj;
-      } else {
-        throw new Error(response.data.msg || 'Панель отклонила запрос');
-      }
+      // 4. Формируем красивую ссылку
+      const publicUrl = `${this.publicDomain}/sub/${subId}`;
+
+      console.log(`✅ Клиент создан: ${email}, Ссылка: ${publicUrl}`);
+
+      return {
+        configUrl: publicUrl,
+        uuid: uuid,
+        email: email,
+        subId: subId
+      };
+
     } catch (error) {
-      console.error('❌ [XUI] Ошибка создания клиента:', error.message);
+      console.error('❌ Ошибка при добавлении клиента:', error.response?.data || error.message);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+          console.log('🔄 Пробуем перелогиниться...');
+          this.authenticatedClient = null;
+          return this.createClient(tgId);
+      }
       throw error;
     }
   }
-
-  /**
-   * Получение списка инбаундов (нужно для отладки)
-   */
-  async getInbounds() {
-    await this._ensureAuthenticated();
-    const response = await this.authenticatedClient.get('/panel/api/inbounds/list');
-    return response.data.obj;
-  }
 }
 
-const xuiService = new XuiService();
-export default xuiService;
+export default new XuiService();
