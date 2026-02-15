@@ -13,19 +13,36 @@ const port = process.env.PORT || 3000;
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MINI_APP_URL = process.env.MINI_APP_URL;
 
+// --- УМНАЯ ПРОВЕРКА ПОДПИСКИ ---
+// Берет подписку из БД и проверяет физическое наличие ключа в панели
+async function getValidatedSubscription(tg_id) {
+  const sub = database.getUserSubscription(tg_id);
+  
+  if (sub && sub.status === 'active') {
+    const exists = await xuiService.checkClientExists(sub.email);
+    if (!exists) {
+      console.log(`[SYNC] Клиент ${sub.email} не найден в панели! Меняем статус на deleted.`);
+      database.updateClientStatus(sub.id, 'deleted');
+      sub.status = 'deleted'; 
+    }
+  }
+  return sub;
+}
+
 // Вспомогательная функция для отрисовки главного меню
 async function sendOrEditMainMenu(ctx, isEdit = false) {
   const tg_id = ctx.from.id;
   const first_name = ctx.from.first_name || 'друг';
 
-  const subscription = database.getUserSubscription(tg_id);
+  // Используем валидированную подписку
+  const subscription = await getValidatedSubscription(tg_id);
+  
   let subStatus = "ОТСУТСТВУЕТ";
   let expiryDate = "--.--.----";
   let hasActiveSub = false;
 
-  if (subscription) {
-    // Проверяем, не истекло ли время подписки
-    hasActiveSub = subscription.expiry_time > Date.now() && subscription.status === 'active';
+  if (subscription && subscription.status !== 'deleted') {
+    hasActiveSub = subscription.expiry_time > Date.now();
     subStatus = hasActiveSub ? 'АКТИВНА ✅' : 'ИСТЕКЛА ❌';
     expiryDate = subscription.expiry_time
       ? new Date(subscription.expiry_time).toLocaleDateString()
@@ -40,21 +57,18 @@ async function sendOrEditMainMenu(ctx, isEdit = false) {
 
 ⌛️ <b>Ваша подписка:</b> <code>${subStatus}</code> ${hasActiveSub ? `(до ${expiryDate})` : ''}
 
-${!subscription ? '🎁 <i>У вас есть доступ к бесплатной пробной подписке на 72 часа! Нажмите кнопку ниже для активации.</i>' : ''}
+${(!subscription || subscription.status === 'deleted') ? '🎁 <i>У вас есть доступ к бесплатной пробной подписке на 72 часа! Нажмите кнопку ниже для активации.</i>' : ''}
   `;
 
   const keyboard = [];
 
-  // Показываем кнопку "Подключиться", только если есть активная подписка
   if (hasActiveSub) {
     keyboard.push([Markup.button.webApp('🔌 Подключиться', MINI_APP_URL)]);
   }
 
-  // Если подписки вообще нет - даем кнопку активации триала
-  if (!subscription) {
+  if (!subscription || subscription.status === 'deleted') {
     keyboard.push([Markup.button.callback('🎁 Активировать 72 часа бесплатно', 'activate_trial')]);
   } else {
-    // Если есть (активная или истекшая) - показываем кнопку продления
     keyboard.push([Markup.button.callback('💳 Продлить', 'renew_sub')]);
   }
 
@@ -63,7 +77,7 @@ ${!subscription ? '🎁 <i>У вас есть доступ к бесплатно
     Markup.button.url('💬 Поддержка', 'https://t.me/nexus_vpn_support')
   ]);
   keyboard.push([Markup.button.callback('ℹ️ О нас', 'about')]);
-  keyboard.push([Markup.button.url('📢 Наш канал', 'https://t.me/your_channel_link')]);
+  keyboard.push([Markup.button.url('📢 Наш канал', 'https://t.me/NexusRoute')]);
 
   if (isEdit) {
     await ctx.editMessageText(welcomeMessage, {
@@ -99,7 +113,7 @@ bot.start(async (ctx) => {
           database.setReferrer(tg_id, referrerId);
           try {
             await bot.telegram.sendMessage(referrerId, `🎁 По вашей ссылке присоединился <b>${first_name}</b>!`, { parse_mode: 'HTML' });
-          } catch (e) { console.error('Ошибка уведомления реферера'); }
+          } catch (e) { }
         }
       }
     }
@@ -110,15 +124,15 @@ bot.start(async (ctx) => {
   }
 });
 
-// Активация пробного периода
 bot.action('activate_trial', async (ctx) => {
   try {
     const tg_id = ctx.from.id;
     const user = database.getUserByTgId(tg_id);
-    const existingSub = database.getUserSubscription(tg_id);
+    const existingSub = await getValidatedSubscription(tg_id);
 
-    if (existingSub) {
-      return ctx.answerCbQuery('У вас уже была подписка!', { show_alert: true });
+    // Разрешаем триал только если подписки вообще нет или она имеет статус deleted
+    if (existingSub && existingSub.status !== 'deleted') {
+      return ctx.answerCbQuery('У вас уже есть подписка!', { show_alert: true });
     }
 
     await ctx.answerCbQuery('Создаем подписку... ⏳');
@@ -135,7 +149,6 @@ bot.action('activate_trial', async (ctx) => {
       expiry_time: xuiResult.expiryTime
     });
 
-    // Обновляем меню (появится кнопка Подключиться)
     await sendOrEditMainMenu(ctx, true);
   } catch (err) {
     console.error('Activate Trial Error:', err);
@@ -154,9 +167,7 @@ bot.action('renew_sub', async (ctx) => {
       parse_mode: 'HTML',
       reply_markup: keyboard.reply_markup
     });
-  } catch (err) {
-    console.error('Renew action error:', err);
-  }
+  } catch (err) { }
 });
 
 bot.action('pay_crypto_sbp', async (ctx) => {
@@ -166,12 +177,9 @@ bot.action('pay_crypto_sbp', async (ctx) => {
 bot.action('back_to_main', async (ctx) => {
   try {
     await sendOrEditMainMenu(ctx, true);
-  } catch (err) {
-    console.error('Back action error:', err);
-  }
+  } catch (err) { }
 });
 
-// Обновленная логика бонусов
 bot.action('bonuses', async (ctx) => {
   try {
     const tg_id = ctx.from.id;
@@ -201,9 +209,7 @@ bot.action('bonuses', async (ctx) => {
       parse_mode: 'HTML',
       reply_markup: keyboard.reply_markup
     });
-  } catch (err) {
-    console.error('Bonuses action error:', err);
-  }
+  } catch (err) { }
 });
 
 bot.action('about', async (ctx) => {
@@ -237,9 +243,7 @@ bot.action('about', async (ctx) => {
       parse_mode: 'HTML',
       reply_markup: keyboard.reply_markup
     });
-  } catch (err) {
-    console.error('About action error:', err);
-  }
+  } catch (err) { }
 });
 
 bot.telegram.setChatMenuButton({
@@ -260,13 +264,13 @@ app.get('/health', (req, res) => res.json({ status: 'OK' }));
 app.get('/vpn/key', authMiddleware, async (req, res) => {
   try {
     const { tg_id, username, first_name } = req.user;
-    let user = database.getOrCreateUser({ tg_id, username: username || '', first_name: first_name || '' });
+    database.getOrCreateUser({ tg_id, username: username || '', first_name: first_name || '' });
 
-    // Пытаемся найти клиента
-    const subscription = database.getUserSubscription(tg_id);
+    // Проверяем подписку через валидатор
+    const subscription = await getValidatedSubscription(tg_id);
 
-    // Если клиент есть и его подписка активна (время не вышло) - отдаем. Иначе null.
-    if (subscription && subscription.expiry_time > Date.now()) {
+    // Отдаем ключ в WebApp только если он реально активен и срок не вышел
+    if (subscription && subscription.status === 'active' && subscription.expiry_time > Date.now()) {
         return res.status(200).json({ vpn_client: subscription });
     } else {
         return res.status(200).json({ vpn_client: null });
@@ -277,29 +281,48 @@ app.get('/vpn/key', authMiddleware, async (req, res) => {
   }
 });
 
-// --- АВТОРАССЫЛКА (УВЕДОМЛЕНИЯ ОБ ОКОНЧАНИИ) ---
+// --- АВТОРАССЫЛКА И УДАЛЕНИЕ ---
 async function checkSubscriptionsAndNotify() {
   try {
     const users = database.getAllUsers();
     const now = Date.now();
     
-    // Временные интервалы (в миллисекундах)
+    // Временные интервалы
     const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
     const FIVE_DAYS = 5 * 24 * 60 * 60 * 1000; // 2 дня + 3 дня = 5 дней
+    const TWELVE_DAYS = 12 * 24 * 60 * 60 * 1000; // 5 дней (3 сообщение) + 7 дней = 12 дней (Удаление)
 
     for (const user of users) {
       const sub = database.getUserSubscription(user.tg_id);
       
-      // Игнорируем если: нет подписки / вечная подписка / подписка еще активна
-      if (!sub || sub.expiry_time === 0 || sub.expiry_time > now) {
+      // Игнорируем если: нет подписки / подписка удалена / вечная / еще активна
+      if (!sub || sub.status === 'deleted' || sub.expiry_time === 0 || sub.expiry_time > now) {
         continue; 
       }
 
       const timePassed = now - sub.expiry_time;
       let currentStep = sub.notification_step || 0;
+
+      // 4. Логика финального удаления (12 дней после истечения)
+      if (currentStep === 3 && timePassed >= TWELVE_DAYS) {
+        try {
+          const isDeleted = await xuiService.deleteClient(sub.inbound_id, sub.uuid);
+          // Помечаем удаленным даже если панель вернула ошибку (возможно его там уже нет)
+          database.updateClientStatus(sub.id, 'deleted');
+          
+          if (isDeleted) {
+            await bot.telegram.sendMessage(user.tg_id, "<b>Ваш ключ был окончательно удален из системы 🗑</b>\nЧтобы пользоваться VPN снова, создайте новую подписку через меню.", { parse_mode: 'HTML' });
+            console.log(`🗑 [XUI] Клиент ${sub.email} удален за неуплату.`);
+          }
+        } catch (err) {
+          console.error(`Ошибка при удалении ${user.tg_id}:`, err);
+        }
+        continue; 
+      }
+
+      // Логика отправки сообщений (1, 2, 3)
       let messageToSend = null;
 
-      // Логика шагов (отправляем 1 раз на каждый этап)
       if (currentStep === 0) {
         messageToSend = 1;
         currentStep = 1;
@@ -318,23 +341,13 @@ async function checkSubscriptionsAndNotify() {
           ]);
 
           let text = '';
-          if (messageToSend === 1) {
-            text = `<b>Доступ к глобальной сети ограничен 🛡</b>\n\nСрок вашей подписки истек. Это значит, что YouTube, Instagram и другие важные сервисы снова стали недоступны.\n\nМы ценим ваш комфорт и не хотим, чтобы блокировки мешали вашим планам. Ваш ключ всё ещё сохранен в системе — просто активируйте его, чтобы вернуть интернет в привычное состояние.\n\n👇 Восстановить доступ:`;
-          } else if (messageToSend === 2) {
-            text = `<b>Скучали по интернету без границ? ✨</b>\n\nПрошло два дня с тех пор, как ваш доступ в Nexus был приостановлен. Скорее всего, вы уже заметили, как неудобно пользоваться заблокированными сервисами через медленные бесплатные решения.\n\nВ Nexus всё работает иначе: честная скорость, никаких лимитов и полная доступность YouTube в 4K. Вернитесь к качеству, которого вы достойны.\n\n👇 Вернуть всё как было:`;
-          } else if (messageToSend === 3) {
-            text = `<b>Ваш ключ Nexus ждет активации 🔑</b>\n\nМы в последний раз напоминаем, что ваш личный канал связи сейчас неактивен. Пока подписка не продлена, доступ к заблокированным ресурсам остается закрытым.\n\nНастройка занимает всего 30 секунд. Нажмите кнопку ниже, чтобы снова пользоваться интернетом без цензуры и тормозов.\n\n👇 Подключиться:`;
-          }
+          if (messageToSend === 1) text = `<b>Доступ к глобальной сети ограничен 🛡</b>\n\nСрок вашей подписки истек. Это значит, что YouTube, Instagram и другие важные сервисы снова стали недоступны.\n\nМы ценим ваш комфорт и не хотим, чтобы блокировки мешали вашим планам. Ваш ключ всё ещё сохранен в системе — просто активируйте его, чтобы вернуть интернет в привычное состояние.\n\n👇 Восстановить доступ:`;
+          else if (messageToSend === 2) text = `<b>Скучали по интернету без границ? ✨</b>\n\nПрошло два дня с тех пор, как ваш доступ в Nexus был приостановлен. Скорее всего, вы уже заметили, как неудобно пользоваться заблокированными сервисами через медленные бесплатные решения.\n\nВ Nexus всё работает иначе: честная скорость, никаких лимитов и полная доступность YouTube в 4K. Вернитесь к качеству, которого вы достойны.\n\n👇 Вернуть всё как было:`;
+          else if (messageToSend === 3) text = `<b>Ваш ключ Nexus ждет активации 🔑</b>\n\nМы в последний раз напоминаем, что ваш личный канал связи сейчас неактивен. Пока подписка не продлена, доступ к заблокированным ресурсам остается закрытым.\n\nНастройка занимает всего 30 секунд. Нажмите кнопку ниже, чтобы снова пользоваться интернетом без цензуры и тормозов.\n\n👇 Подключиться:`;
 
-          // Отправляем сообщение юзеру
           await bot.telegram.sendMessage(user.tg_id, text, { parse_mode: 'HTML', reply_markup: keyboard.reply_markup });
-          
-          // Сохраняем шаг в базу данных
           database.updateNotificationStep(sub.id, currentStep);
-        } catch (err) {
-          // Игнорируем ошибку (например, если пользователь заблокировал бота)
-          console.error(`Failed to send auto-mailing to ${user.tg_id}:`, err.message);
-        }
+        } catch (err) { }
       }
     }
   } catch (err) {
@@ -342,9 +355,7 @@ async function checkSubscriptionsAndNotify() {
   }
 }
 
-// Запускаем проверку подписок каждый час
 setInterval(checkSubscriptionsAndNotify, 60 * 60 * 1000);
-// Делаем самую первую проверку через 10 секунд после старта сервера
 setTimeout(checkSubscriptionsAndNotify, 10000);
 
 app.listen(port, () => {

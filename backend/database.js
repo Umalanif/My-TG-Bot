@@ -36,23 +36,19 @@ db.exec(`
     total_limit INTEGER DEFAULT 0,
     expiry_time INTEGER DEFAULT 0,
     config_url TEXT,
+    notification_step INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
   );
 `);
 
-// 2. ОБНОВЛЕНИЯ БАЗЫ ДАННЫХ (Добавление колонок)
 try {
   db.exec("ALTER TABLE users ADD COLUMN referred_by INTEGER;");
-  console.log("✅ База данных: добавлена колонка referred_by");
 } catch (e) {}
-
 try {
   db.exec("ALTER TABLE vpn_clients ADD COLUMN notification_step INTEGER DEFAULT 0;");
-  console.log("✅ База данных: добавлена колонка notification_step (для авторассылки)");
 } catch (e) {}
-
 
 const database = {
   getOrCreateUser: ({ tg_id, username, first_name }) => {
@@ -104,6 +100,10 @@ const database = {
 
   updateNotificationStep: (client_id, step) => {
     db.prepare('UPDATE vpn_clients SET notification_step = ? WHERE id = ?').run(step, client_id);
+  },
+
+  updateClientStatus: (client_id, status) => {
+    db.prepare('UPDATE vpn_clients SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, client_id);
   },
 
   close: () => db.close()

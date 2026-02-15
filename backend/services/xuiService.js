@@ -5,24 +5,19 @@ import crypto from 'crypto';
 class XuiService {
   constructor() {
     this.baseUrl = process.env.XUI_BASE_URL;
-    // Возвращаем поддержку BASE_PATH (если у тебя панель не в корне)
     this.basePath = process.env.XUI_BASE_PATH || '/'; 
     this.username = process.env.XUI_USERNAME;
     this.password = process.env.XUI_PASSWORD;
-
-    // Жестко прописываем домен для подписки (как договаривались)
     this.publicDomain = 'https://jsstudy.xyz:2096'; 
 
     if (!this.baseUrl || !this.username || !this.password) {
       console.error('❌ [XUI ERROR] ПЕРЕМЕННЫЕ НЕ НАЙДЕНЫ В .ENV!');
     }
 
-    // Правильная сборка URL (как было у тебя раньше)
     const cleanPath = this.basePath.startsWith('/') ? this.basePath : `/${this.basePath}`;
-    // Убираем двойные слэши, но оставляем http://
     const fullUrl = `${this.baseUrl}${cleanPath}`.replace(/([^:]\/)\/+/g, "$1");
 
-    console.log(`[XUI DEBUG] Бот будет стучаться сюда: ${fullUrl}`); // <-- СМОТРИ В ЛОГИ СЮДА
+    console.log(`[XUI DEBUG] Базовый URL: ${fullUrl}`);
 
     this.apiClient = axios.create({
       baseURL: fullUrl,
@@ -32,16 +27,12 @@ class XuiService {
     this.authenticatedClient = null;
   }
 
-  // Генерация случайного subId (16 символов)
   generateSubId() {
     return crypto.randomBytes(8).toString('hex');
   }
 
   async authenticate() {
     try {
-      // Пытаемся залогиниться
-      console.log(`[XUI DEBUG] Пробую логин по адресу: ${this.apiClient.defaults.baseURL}login`);
-      
       const response = await this.apiClient.post('/login', {
         username: this.username,
         password: this.password
@@ -68,10 +59,42 @@ class XuiService {
       return false;
     } catch (e) {
       console.error(`❌ [XUI] Ошибка логина: ${e.message}`);
-      // Если 404 - значит адрес неверный
-      if (e.response && e.response.status === 404) {
-          console.error('⚠️ ПРОВЕРЬ .ENV: Бот стучится не туда. Проверь XUI_BASE_URL и XUI_BASE_PATH');
+      return false;
+    }
+  }
+
+  // --- НОВАЯ ФУНКЦИЯ: Проверка наличия клиента ---
+  async checkClientExists(email) {
+    if (!this.authenticatedClient) {
+      const success = await this.authenticate();
+      if (!success) return true; // Если не можем войти, возвращаем true, чтобы случайно не удалить
+    }
+
+    try {
+      const response = await this.authenticatedClient.get(`/panel/api/inbounds/getClientTraffics/${email}`);
+      // Если клиент есть, панель вернет { success: true, obj: {...} }. Если нет obj, значит удален.
+      if (response.data && response.data.success && response.data.obj) {
+        return true;
       }
+      return false;
+    } catch (error) {
+      console.error(`⚠️ [XUI] Ошибка проверки существования клиента ${email}:`, error.message);
+      return true; // При сетевой ошибке лучше перестраховаться
+    }
+  }
+
+  // --- НОВАЯ ФУНКЦИЯ: Удаление клиента ---
+  async deleteClient(inboundId, clientUuid) {
+    if (!this.authenticatedClient) {
+      const success = await this.authenticate();
+      if (!success) throw new Error('Не удалось авторизоваться в панели');
+    }
+
+    try {
+      const response = await this.authenticatedClient.post(`/panel/api/inbounds/${inboundId}/delClient/${clientUuid}`);
+      return response.data.success;
+    } catch (error) {
+      console.error(`❌ [XUI] Ошибка удаления клиента ${clientUuid}:`, error.message);
       return false;
     }
   }
@@ -82,15 +105,15 @@ class XuiService {
         if (!success) throw new Error('Не удалось авторизоваться в панели');
     }
 
-    // 1. Генерируем данные
-    const uuid = crypto.randomUUID();
-    const subId = this.generateSubId(); // Короткий ID
-    const email = `user_${tgId}_${Date.now()}`;
+    const cleanTgId = (typeof tgId === 'object' && tgId !== null) 
+        ? (tgId.tg_id || tgId.id || tgId.toString()) 
+        : tgId;
 
-    // Высчитываем 72 часа от текущего времени в миллисекундах
+    const uuid = crypto.randomUUID();
+    const subId = this.generateSubId(); 
+    const email = `user_${cleanTgId}_${Date.now()}`;
     const expiryTimeMs = Date.now() + (72 * 60 * 60 * 1000);
 
-    // 2. Данные для панели
     const clientPayload = {
       id: uuid,
       email: email,
@@ -98,13 +121,12 @@ class XuiService {
       totalGB: 0,
       expiryTime: expiryTimeMs,
       enable: true,
-      tgId: tgId.toString(),
-      subId: subId, // Передаем subId в панель
+      tgId: cleanTgId.toString(),
+      subId: subId,
       flow: "",
     };
 
     try {
-      // 3. Отправляем в панель (ID подключения = 1, проверь в панели!)
       const inboundId = 2; 
 
       await this.authenticatedClient.post('/panel/api/inbounds/addClient', {
@@ -114,10 +136,8 @@ class XuiService {
         })
       });
 
-      // 4. Формируем красивую ссылку
       const publicUrl = `${this.publicDomain}/sub/${subId}`;
-
-      console.log(`✅ Клиент создан: ${email}, Ссылка: ${publicUrl}`);
+      console.log(`✅ Клиент создан: ${email}`);
 
       return {
         configUrl: publicUrl,
@@ -130,7 +150,6 @@ class XuiService {
     } catch (error) {
       console.error('❌ Ошибка при добавлении клиента:', error.response?.data || error.message);
       if (error.response?.status === 401 || error.response?.status === 403) {
-          console.log('🔄 Пробуем перелогиниться...');
           this.authenticatedClient = null;
           return this.createClient(tgId);
       }

@@ -6,7 +6,7 @@ const API_BASE_URL = '/api';
 
 const LINKS = {
   android: 'https://play.google.com/store/apps/details?id=com.v2raytun.android', 
-  ios: 'https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690', 
+  ios: 'https://apps.apple.com/us/app/v2raytun/id6476628951', 
   
   windows: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-windows-64-desktop.zip',
   macos: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-macos-64.zip',
@@ -20,9 +20,7 @@ const Icons = {
   VpnLock: () => <span className="material-icons-round earth-blink">vpn_lock</span>,
   Laptop: () => <span className="material-icons-round">laptop_mac</span>,
   ChevronRight: () => <span className="material-icons-round">chevron_right</span>,
-  
   Rocket: () => <img src="./v2ray.png" alt="v2ray" style={{width: '28px', height: '28px', objectFit: 'contain'}} />,
-  
   Copy: () => <span className="material-icons-round">content_copy</span>,
   Apple: () => <span className="material-icons-round">apple</span>,
   Android: () => <span className="material-icons-round">android</span>,
@@ -105,36 +103,10 @@ function App() {
   const handleAction = (type, payload = null) => {
     if (hapticFeedback.impactOccurred.isAvailable()) hapticFeedback.impactOccurred('light');
     
-    if (type === 'smartphone' || type === 'desktop') { 
+    // Если нужно открыть меню подключения или инструкции
+    if (type === 'smartphone' || type === 'desktop' || type === 'connect_menu') { 
       setModal({ active: true, type, step: 1 }); 
       return; 
-    }
-
-    if (type === 'copy_key' && vpnData.configUrl) {
-      navigator.clipboard.writeText(vpnData.configUrl);
-      if (hapticFeedback.notificationOccurred.isAvailable()) hapticFeedback.notificationOccurred('success');
-      showToast('✅ Скопировано в буфер обмена!');
-      return;
-    }
-
-    if (type === 'deep_connect') {
-      const platform = window.Telegram?.WebApp?.platform || 'unknown';
-      
-      // Принудительно копируем ключ в буфер перед попыткой открыть приложение
-      try {
-        navigator.clipboard.writeText(vpnData.configUrl);
-      } catch (e) {}
-      
-      if (platform === 'android') {
-        showToast('✅ Скопировано! Открываем V2rayTun...');
-        openLink(`v2raytun://install-sub?url=${encodeURIComponent(vpnData.configUrl)}&name=NexusVPN`);
-      } else if (platform === 'ios') {
-        showToast('✅ Скопировано! Открываем V2Box...');
-        openLink(`v2box://install-sub?url=${encodeURIComponent(vpnData.configUrl)}&name=NexusVPN`);
-      } else {
-        showToast('🔗 Скопировано! Откройте клиент и нажмите Ctrl+V');
-      }
-      return;
     }
 
     openLink(payload || LINKS[type]);
@@ -157,7 +129,6 @@ function App() {
           color: #0ea5e9;
         }
         
-        /* Стили для всплывающего уведомления (Тоста) */
         .toast-message {
           position: fixed;
           bottom: 30px;
@@ -184,7 +155,6 @@ function App() {
 
       <div className="scanlines"></div>
 
-      {/* Отрисовка тоста */}
       {toast && <div className="toast-message">{toast}</div>}
 
       <main className="main-content">
@@ -220,30 +190,21 @@ function App() {
         <section style={{marginBottom: '24px'}}>
             <h3 className="section-title">Быстрое подключение</h3>
             <div className="hiddify-btn-wrapper">
-              <div className="hiddify-inner">
+              <div className="hiddify-inner" style={{ padding: '4px' }}>
                   <button
                       disabled={!vpnData.configUrl}
-                      onClick={() => handleAction('deep_connect')} 
+                      onClick={() => handleAction('connect_menu')} 
                       className="btn-main-action"
+                      style={{ width: '100%', border: 'none', background: 'transparent' }}
                   >
                       <div className="hiddify-icon">
                         <Icons.Rocket /> 
                       </div>
-                      <div>
-                        <div className="bold" style={{fontSize: '16px', lineHeight: '1.2'}}>Подключить</div>
-                        <div style={{fontSize: '11px', color: '#64748b'}}>
-                          {window.Telegram?.WebApp?.platform === 'android' ? 'V2rayTun (Android)' : 
-                           window.Telegram?.WebApp?.platform === 'ios' ? 'V2Box (iOS)' : 'ПК (Копировать)'}
-                        </div>
+                      <div style={{ textAlign: 'left', flex: 1 }}>
+                        <div className="bold" style={{fontSize: '16px', lineHeight: '1.2'}}>Добавить подписку</div>
+                        <div style={{fontSize: '11px', color: '#64748b'}}>Нажмите для настройки</div>
                       </div>
-                  </button>
-                  <div className="divider-vertical"></div>
-                  <button
-                    disabled={!vpnData.configUrl}
-                    onClick={(e) => { e.stopPropagation(); handleAction('copy_key'); }}
-                    className="btn-copy-sm"
-                  >
-                     <Icons.Copy />
+                      <Icons.ChevronRight />
                   </button>
               </div>
             </div>
@@ -272,24 +233,96 @@ function App() {
               </div>
               <Icons.ChevronRight />
             </button>
+
+            {/* Ссылки на Саппорт и Бота */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', padding: '0 5px' }}>
+              <button 
+                onClick={() => openLink(LINKS.support)} 
+                style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '13px', textDecoration: 'underline', padding: 0, cursor: 'pointer' }}
+              >
+                💬 Написать в саппорт
+              </button>
+              <button 
+                onClick={() => window.Telegram?.WebApp?.close()} 
+                style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '13px', textDecoration: 'underline', padding: 0, cursor: 'pointer' }}
+              >
+                🤖 Вернуться в бота
+              </button>
+            </div>
           </div>
         </section>
       </main>
 
+      {/* --- МОДАЛЬНЫЕ ОКНА --- */}
       {modal.active && (
         <div className="modal-overlay" onClick={(e) => { if(e.target === e.currentTarget) setModal({...modal, active: false}); }}>
           <div className="modal-content">
             <div className="drag-handle"></div>
+            
             <div style={{textAlign: 'center', marginBottom: '20px'}}>
               <h3 className="font-orbitron bold" style={{fontSize: '18px'}}>
-                {modal.type === 'smartphone' ? 'Настройка Mobile' : 'Настройка Desktop'}
+                {modal.type === 'smartphone' ? 'Настройка Mobile' : 
+                 modal.type === 'desktop' ? 'Настройка Desktop' : 
+                 modal.type === 'qr_code' ? 'Ваш QR-код' : 'Подключение'}
               </h3>
-              <p className="section-title" style={{textAlign: 'center', padding: 0, marginTop: '6px', fontSize: '12px'}}>
-                Шаг {modal.step}: {modal.step === 1 ? 'Загрузка клиента' : 'Активация'}
-              </p>
+              {(modal.type === 'smartphone' || modal.type === 'desktop') && (
+                <p className="section-title" style={{textAlign: 'center', padding: 0, marginTop: '6px', fontSize: '12px'}}>
+                  Шаг {modal.step}: {modal.step === 1 ? 'Загрузка клиента' : 'Активация'}
+                </p>
+              )}
             </div>
 
-            {modal.step === 1 && (
+            {/* МЕНЮ: ДОБАВИТЬ ПОДПИСКУ (КОПИРОВАТЬ / QR) */}
+            {modal.type === 'connect_menu' && (
+              <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                 <button onClick={() => {
+                    navigator.clipboard.writeText(vpnData.configUrl);
+                    if (hapticFeedback.notificationOccurred.isAvailable()) hapticFeedback.notificationOccurred('success');
+                    showToast('✅ Скопировано! Откройте клиент и нажмите Ctrl+V');
+                    setModal({...modal, active: false});
+                 }} className="btn-glass highlight">
+                    <div className="btn-content">
+                      <Icons.Copy />
+                      <div>
+                        <div className="bold">Скопировать ссылку</div>
+                        <div style={{fontSize:'10px', color:'#94a3b8'}}>Для вставки в приложение</div>
+                      </div>
+                    </div>
+                 </button>
+
+                 <button onClick={() => setModal({ active: true, type: 'qr_code', step: 1 })} className="btn-glass">
+                    <div className="btn-content">
+                      <span className="material-icons-round">qr_code_2</span>
+                      <div>
+                        <div className="bold">Показать QR-код</div>
+                        <div style={{fontSize:'10px', color:'#94a3b8'}}>Для сканирования камерой</div>
+                      </div>
+                    </div>
+                 </button>
+
+                 <button onClick={() => setModal({...modal, active: false})} className="btn-outline" style={{marginTop: '10px'}}>Отмена</button>
+              </div>
+            )}
+
+            {/* МЕНЮ: QR-КОД */}
+            {modal.type === 'qr_code' && (
+              <div style={{display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center'}}>
+                 <div style={{ background: '#fff', padding: '15px', borderRadius: '16px' }}>
+                    <img 
+                       src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(vpnData.configUrl || '')}`} 
+                       alt="QR Code" 
+                       style={{ width: '220px', height: '220px', display: 'block' }} 
+                    />
+                 </div>
+                 <p style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
+                    Отсканируйте этот код через приложение на другом устройстве.
+                 </p>
+                 <button onClick={() => setModal({ active: true, type: 'connect_menu', step: 1 })} className="btn-outline" style={{width: '100%'}}>Назад</button>
+              </div>
+            )}
+
+            {/* ШАГ 1: ИНСТРУКЦИИ */}
+            {modal.step === 1 && (modal.type === 'smartphone' || modal.type === 'desktop') && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                 {modal.type === 'smartphone' ? (
                   <>
@@ -307,7 +340,7 @@ function App() {
                         <Icons.Apple /> 
                         <div>
                           <div className="bold">App Store</div>
-                          <div style={{fontSize: '10px', color: '#888'}}>Скачать V2Box</div>
+                          <div style={{fontSize: '10px', color: '#888'}}>Скачать V2RayTun</div>
                         </div>
                       </div>
                     </button>
@@ -323,27 +356,19 @@ function App() {
               </div>
             )}
 
-            {modal.step === 2 && (
+            {/* ШАГ 2: ИНСТРУКЦИИ (ЗАМЕНЕНО НА 1 КНОПКУ МЕНЮ) */}
+            {modal.step === 2 && (modal.type === 'smartphone' || modal.type === 'desktop') && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                  <button
                   disabled={!vpnData.configUrl}
-                  onClick={() => handleAction('deep_connect')}
+                  onClick={() => setModal({ active: true, type: 'connect_menu', step: 1 })}
                   className="btn-glass highlight"
                  >
                     <div className="btn-content">
                       <Icons.Rocket />
                       <div>
                         <div className="bold">Добавить подписку</div>
-                        <div style={{fontSize:'10px', color:'#94a3b8'}}>Нажми для настройки в 1 клик</div>
-                      </div>
-                    </div>
-                 </button>
-                 <button onClick={() => handleAction('copy_key')} className="btn-glass">
-                    <div className="btn-content">
-                      <Icons.Copy />
-                      <div>
-                        <div className="bold">Копировать ключ</div>
-                        <div style={{fontSize:'10px', color:'#94a3b8'}}>Для ручного добавления</div>
+                        <div style={{fontSize:'10px', color:'#94a3b8'}}>Скопировать или показать QR</div>
                       </div>
                     </div>
                  </button>
