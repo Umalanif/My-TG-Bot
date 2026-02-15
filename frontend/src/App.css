@@ -1,12 +1,12 @@
 :root {
-  --primary: #00f0ff;       /* Neon Cyan */
+  --primary: #00f0ff;       /* Настоящий Cyberpunk Cyan */
   --secondary: #7000ff;     /* Neon Purple */
   --bg-dark: #050b14;       /* Deep Navy */
-  --glass-bg: rgba(30, 41, 59, 0.6);
+  --glass-bg: rgba(30, 41, 59, 0.4);
   --glass-border: rgba(255, 255, 255, 0.08);
   --text-white: #f3f4f6;
   --text-gray: #9ca3af;
-  --danger: #ff0055;
+  --danger: #ff0055;        /* Настоящий Neon Pink для ошибок/неактивной подписки */
   --card-hover: rgba(30, 41, 59, 0.8);
 }
 
@@ -18,7 +18,7 @@
 body {
   margin: 0;
   padding: 0;
-  background-color: var(--bg-dark);
+  background-color: var(--bg-dark); 
   font-family: 'Rajdhani', sans-serif;
   color: var(--text-white);
   -webkit-font-smoothing: antialiased;
@@ -33,12 +33,6 @@ body {
   padding: 16px;
   position: relative;
   overflow: hidden;
-  /* Фоновые градиенты */
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-    radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-    radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
-  background-attachment: fixed;
 }
 
 .scanlines {
@@ -94,7 +88,6 @@ body {
   border-radius: 16px;
   padding: 20px;
   margin-bottom: 24px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
   position: relative;
   overflow: hidden;
 }
@@ -116,9 +109,8 @@ body {
 
 /* СТАТУС БАР */
 .status-bar {
-  background: linear-gradient(90deg, rgba(255,0,85,0.15), transparent);
-  border-left: 4px solid var(--danger);
-  border-radius: 0 12px 12px 0;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
   padding: 12px 16px;
   display: flex; justify-content: space-between; align-items: center;
 }
@@ -169,7 +161,7 @@ body {
   color: var(--primary);
 }
 
-/* --- КНОПКА HIDDIFY (ОСОБАЯ) --- */
+/* --- КНОПКА ПОДКЛЮЧЕНИЯ --- */
 .hiddify-btn-wrapper {
   background: rgba(30, 41, 59, 0.6);
   border: 1px solid rgba(0, 240, 255, 0.3);
@@ -196,25 +188,9 @@ body {
 .hiddify-icon {
   width: 48px; height: 48px;
   border-radius: 12px;
-  background: var(--primary);
+  background: var(--primary); 
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
 }
-
-.divider-vertical {
-  width: 1px; background: rgba(255,255,255,0.1);
-  margin: 8px 0;
-}
-
-.btn-copy-sm {
-  width: 64px;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 4px;
-  background: transparent; border: none;
-  cursor: pointer; color: var(--text-gray);
-}
-.btn-copy-sm:active { background: rgba(255,255,255,0.05); }
 
 /* --- МОДАЛЬНОЕ ОКНО --- */
 .modal-overlay {
@@ -241,6 +217,7 @@ body {
   border-radius: 2px; margin: 0 auto 20px;
 }
 
+/* Кнопка с заливкой (цвет текста изменен на черный для лучшего контраста с ярким циановым) */
 .btn-primary {
   width: 100%; padding: 16px;
   background: var(--primary); color: #000;
@@ -259,7 +236,6 @@ body {
 }
 
 /* --- АНИМАЦИИ --- */
-@keyframes pulse { 50% { opacity: 0.5; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 

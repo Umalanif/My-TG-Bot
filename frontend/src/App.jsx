@@ -6,7 +6,7 @@ const API_BASE_URL = '/api';
 
 const LINKS = {
   android: 'https://play.google.com/store/apps/details?id=com.v2raytun.android', 
-  ios: 'https://apps.apple.com/us/app/v2raytun/id6476628951', 
+  ios: 'https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690', 
   
   windows: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-windows-64-desktop.zip',
   macos: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-macos-64.zip',
@@ -103,7 +103,6 @@ function App() {
   const handleAction = (type, payload = null) => {
     if (hapticFeedback.impactOccurred.isAvailable()) hapticFeedback.impactOccurred('light');
     
-    // Если нужно открыть меню подключения или инструкции
     if (type === 'smartphone' || type === 'desktop' || type === 'connect_menu') { 
       setModal({ active: true, type, step: 1 }); 
       return; 
@@ -117,18 +116,65 @@ function App() {
   </div>;
 
   return (
-    <div className="app-container">
+    <div className="app-container animated-bg">
       <style>{`
+        /* 1. Эффект для иконки Земли */
         @keyframes earthBlink {
-          0% { opacity: 1; filter: drop-shadow(0 0 5px #38bdf8); }
-          50% { opacity: 0.7; filter: drop-shadow(0 0 15px #38bdf8); transform: scale(1.05); color: #38bdf8; }
-          100% { opacity: 1; filter: drop-shadow(0 0 5px #38bdf8); }
+          0% { opacity: 1; filter: drop-shadow(0 0 5px #00f0ff); }
+          50% { opacity: 0.7; filter: drop-shadow(0 0 15px #00f0ff); transform: scale(1.05); color: #00f0ff; }
+          100% { opacity: 1; filter: drop-shadow(0 0 5px #00f0ff); }
         }
         .earth-blink {
           animation: earthBlink 2.5s infinite ease-in-out;
-          color: #0ea5e9;
+          color: #00f0ff;
         }
         
+        /* 2. Анимированный КИБЕРПАНК фон (дышащее переливание) */
+        .animated-bg {
+          /* Палитра: Темный Navy -> Глубокий фиолетовый -> Неоновый розовый -> Неоновый циановый */
+          background: linear-gradient(135deg, #050b14, #2a0845, #ff0055, #00f0ff);
+          background-size: 300% 300%;
+          animation: gradient-shift 12s ease-in-out infinite;
+        }
+        @keyframes gradient-shift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+
+        /* 3. Эффект "дыхания" для карточки статуса */
+        .breathing-card-active {
+          animation: breathe-active 4s ease-in-out infinite;
+          will-change: transform, box-shadow;
+        }
+        .breathing-card-inactive {
+          animation: breathe-inactive 4s ease-in-out infinite;
+          will-change: transform, box-shadow;
+        }
+        @keyframes breathe-active {
+          0%, 100% { transform: scale(1); box-shadow: 0 4px 15px rgba(0, 240, 255, 0.1); }
+          50% { transform: scale(1.02); box-shadow: 0 8px 25px rgba(0, 240, 255, 0.3); }
+        }
+        @keyframes breathe-inactive {
+          0%, 100% { transform: scale(1); box-shadow: 0 4px 15px rgba(255, 0, 85, 0.1); }
+          50% { transform: scale(1.02); box-shadow: 0 8px 25px rgba(255, 0, 85, 0.3); }
+        }
+
+        /* 4. Неоновое свечение и переливы для кнопки */
+        .neon-button-glow {
+          animation: neon-glow 3s infinite alternate, hue-rotate-anim 10s linear infinite;
+          will-change: filter;
+        }
+        @keyframes neon-glow {
+          from { filter: drop-shadow(0 0 2px #00f0ff) brightness(1); }
+          to { filter: drop-shadow(0 0 10px #00f0ff) brightness(1.2); }
+        }
+        @keyframes hue-rotate-anim {
+          from { filter: hue-rotate(0deg); }
+          to { filter: hue-rotate(360deg); }
+        }
+        
+        /* Всплывающее уведомление */
         .toast-message {
           position: fixed;
           bottom: 30px;
@@ -153,6 +199,7 @@ function App() {
         }
       `}</style>
 
+      {/* Эффект CRT-монитора (скан-линии поверх фона) */}
       <div className="scanlines"></div>
 
       {toast && <div className="toast-message">{toast}</div>}
@@ -165,7 +212,7 @@ function App() {
           </div>
         </header>
 
-        <section className="glass-panel">
+        <section className={`glass-panel ${vpnData.status === 'active' ? 'breathing-card-active' : 'breathing-card-inactive'}`}>
           <div className="status-bar">
             <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
               <span className={`material-icons-round ${vpnData.status === 'active' ? 'text-primary' : 'text-danger'}`} style={{fontSize: '32px'}}>
@@ -194,7 +241,7 @@ function App() {
                   <button
                       disabled={!vpnData.configUrl}
                       onClick={() => handleAction('connect_menu')} 
-                      className="btn-main-action"
+                      className={`btn-main-action ${vpnData.status === 'active' ? 'neon-button-glow' : ''}`}
                       style={{ width: '100%', border: 'none', background: 'transparent' }}
                   >
                       <div className="hiddify-icon">
@@ -234,11 +281,10 @@ function App() {
               <Icons.ChevronRight />
             </button>
 
-            {/* Ссылки на Саппорт и Бота */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', padding: '0 5px' }}>
               <button 
                 onClick={() => openLink(LINKS.support)} 
-                style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '13px', textDecoration: 'underline', padding: 0, cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', color: '#00f0ff', fontSize: '13px', textDecoration: 'underline', padding: 0, cursor: 'pointer' }}
               >
                 💬 Написать в саппорт
               </button>
@@ -272,7 +318,6 @@ function App() {
               )}
             </div>
 
-            {/* МЕНЮ: ДОБАВИТЬ ПОДПИСКУ (КОПИРОВАТЬ / QR) */}
             {modal.type === 'connect_menu' && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                  <button onClick={() => {
@@ -304,7 +349,6 @@ function App() {
               </div>
             )}
 
-            {/* МЕНЮ: QR-КОД */}
             {modal.type === 'qr_code' && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center'}}>
                  <div style={{ background: '#fff', padding: '15px', borderRadius: '16px' }}>
@@ -321,7 +365,6 @@ function App() {
               </div>
             )}
 
-            {/* ШАГ 1: ИНСТРУКЦИИ */}
             {modal.step === 1 && (modal.type === 'smartphone' || modal.type === 'desktop') && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                 {modal.type === 'smartphone' ? (
@@ -340,7 +383,7 @@ function App() {
                         <Icons.Apple /> 
                         <div>
                           <div className="bold">App Store</div>
-                          <div style={{fontSize: '10px', color: '#888'}}>Скачать V2RayTun</div>
+                          <div style={{fontSize: '10px', color: '#888'}}>Скачать V2Box</div>
                         </div>
                       </div>
                     </button>
@@ -356,13 +399,12 @@ function App() {
               </div>
             )}
 
-            {/* ШАГ 2: ИНСТРУКЦИИ (ЗАМЕНЕНО НА 1 КНОПКУ МЕНЮ) */}
             {modal.step === 2 && (modal.type === 'smartphone' || modal.type === 'desktop') && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
                  <button
                   disabled={!vpnData.configUrl}
                   onClick={() => setModal({ active: true, type: 'connect_menu', step: 1 })}
-                  className="btn-glass highlight"
+                  className={`btn-glass highlight ${vpnData.status === 'active' ? 'neon-button-glow' : ''}`}
                  >
                     <div className="btn-content">
                       <Icons.Rocket />
