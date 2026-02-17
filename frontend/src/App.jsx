@@ -5,13 +5,13 @@ import './App.css';
 const API_BASE_URL = '/api';
 
 const LINKS = {
-  android: 'https://play.google.com/store/apps/details?id=com.v2raytun.android', 
-  ios: 'https://apps.apple.com/us/app/v2box-v2ray-client/id6446814690', 
-  
+  android: 'https://play.google.com/store/apps/details?id=com.v2raytun.android',
+  ios: 'https://apps.apple.com/us/app/v2raytun/id6476628951',
+
   windows: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-windows-64-desktop.zip',
   macos: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-macos-64.zip',
   linux: 'https://github.com/2dust/v2rayN/releases/latest/download/v2rayN-linux-64.zip',
-  
+
   support: 'https://t.me/nexus_vpn_support',
   api_url: `${API_BASE_URL}/vpn/key`
 };
@@ -85,7 +85,7 @@ function App() {
       });
       if (!response.ok) throw new Error();
       const data = await response.json();
-      
+
       if (data.vpn_client) {
         setVpnData({
           status: 'active',
@@ -102,10 +102,10 @@ function App() {
 
   const handleAction = (type, payload = null) => {
     if (hapticFeedback.impactOccurred.isAvailable()) hapticFeedback.impactOccurred('light');
-    
-    if (type === 'smartphone' || type === 'desktop' || type === 'connect_menu') { 
-      setModal({ active: true, type, step: 1 }); 
-      return; 
+
+    if (type === 'smartphone' || type === 'desktop' || type === 'connect_menu') {
+      setModal({ active: true, type, step: 1 });
+      return;
     }
 
     openLink(payload || LINKS[type]);
@@ -128,7 +128,7 @@ function App() {
           animation: earthBlink 2.5s infinite ease-in-out;
           color: #00f0ff;
         }
-        
+
         /* 2. Анимированный КИБЕРПАНК фон (дышащее переливание) */
         .animated-bg {
           /* Палитра: Темный Navy -> Глубокий фиолетовый -> Неоновый розовый -> Неоновый циановый */
@@ -173,7 +173,7 @@ function App() {
           from { filter: hue-rotate(0deg); }
           to { filter: hue-rotate(360deg); }
         }
-        
+
         /* Всплывающее уведомление */
         .toast-message {
           position: fixed;
@@ -207,8 +207,21 @@ function App() {
       <main className="main-content">
         <header className="header">
           <div className="logo-container">
-            <Icons.VpnLock />
-            <h1 className="logo-text font-orbitron">NEXUS<span className="text-primary">-VPN</span></h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+              <Icons.VpnLock />
+              <span style={{ fontSize: '10px', color: 'var(--primary)', fontWeight: 'bold' }}>SECURE NODE</span>
+            </div>
+            <h1 className="logo-text font-orbitron">
+              NEXUS<br/>
+              <span className="text-primary">VPN</span>
+            </h1>
+          </div>
+
+          {/* Понятная и стильная плашка лимита */}
+          <div className="device-limit-badge">
+            <span className="material-icons-round" style={{fontSize: '18px', marginBottom: '2px'}}>devices</span>
+            <span className="device-limit-label">МАКС. УСТРОЙСТВ</span>
+            <span className="device-limit-value font-orbitron">: 2</span>
           </div>
         </header>
 
@@ -240,12 +253,12 @@ function App() {
               <div className="hiddify-inner" style={{ padding: '4px' }}>
                   <button
                       disabled={!vpnData.configUrl}
-                      onClick={() => handleAction('connect_menu')} 
+                      onClick={() => handleAction('connect_menu')}
                       className={`btn-main-action ${vpnData.status === 'active' ? 'neon-button-glow' : ''}`}
                       style={{ width: '100%', border: 'none', background: 'transparent' }}
                   >
                       <div className="hiddify-icon">
-                        <Icons.Rocket /> 
+                        <Icons.Rocket />
                       </div>
                       <div style={{ textAlign: 'left', flex: 1 }}>
                         <div className="bold" style={{fontSize: '16px', lineHeight: '1.2'}}>Добавить подписку</div>
@@ -282,14 +295,14 @@ function App() {
             </button>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', padding: '0 5px' }}>
-              <button 
-                onClick={() => openLink(LINKS.support)} 
+              <button
+                onClick={() => openLink(LINKS.support)}
                 style={{ background: 'none', border: 'none', color: '#00f0ff', fontSize: '13px', textDecoration: 'underline', padding: 0, cursor: 'pointer' }}
               >
                 💬 Написать в саппорт
               </button>
-              <button 
-                onClick={() => window.Telegram?.WebApp?.close()} 
+              <button
+                onClick={() => window.Telegram?.WebApp?.close()}
                 style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '13px', textDecoration: 'underline', padding: 0, cursor: 'pointer' }}
               >
                 🤖 Вернуться в бота
@@ -304,11 +317,11 @@ function App() {
         <div className="modal-overlay" onClick={(e) => { if(e.target === e.currentTarget) setModal({...modal, active: false}); }}>
           <div className="modal-content">
             <div className="drag-handle"></div>
-            
+
             <div style={{textAlign: 'center', marginBottom: '20px'}}>
               <h3 className="font-orbitron bold" style={{fontSize: '18px'}}>
-                {modal.type === 'smartphone' ? 'Настройка Mobile' : 
-                 modal.type === 'desktop' ? 'Настройка Desktop' : 
+                {modal.type === 'smartphone' ? 'Настройка Mobile' :
+                 modal.type === 'desktop' ? 'Настройка Desktop' :
                  modal.type === 'qr_code' ? 'Ваш QR-код' : 'Подключение'}
               </h3>
               {(modal.type === 'smartphone' || modal.type === 'desktop') && (
@@ -352,10 +365,10 @@ function App() {
             {modal.type === 'qr_code' && (
               <div style={{display: 'flex', flexDirection: 'column', gap: '15px', alignItems: 'center'}}>
                  <div style={{ background: '#fff', padding: '15px', borderRadius: '16px' }}>
-                    <img 
-                       src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(vpnData.configUrl || '')}`} 
-                       alt="QR Code" 
-                       style={{ width: '220px', height: '220px', display: 'block' }} 
+                    <img
+                       src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(vpnData.configUrl || '')}`}
+                       alt="QR Code"
+                       style={{ width: '220px', height: '220px', display: 'block' }}
                     />
                  </div>
                  <p style={{ fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
@@ -371,7 +384,7 @@ function App() {
                   <>
                     <button onClick={() => handleAction('android', LINKS.android)} className="btn-glass">
                       <div className="btn-content">
-                        <Icons.Android /> 
+                        <Icons.Android />
                         <div>
                           <div className="bold">Google Play</div>
                           <div style={{fontSize: '10px', color: '#888'}}>Скачать V2rayTun</div>
@@ -380,10 +393,10 @@ function App() {
                     </button>
                     <button onClick={() => handleAction('ios', LINKS.ios)} className="btn-glass">
                       <div className="btn-content">
-                        <Icons.Apple /> 
+                        <Icons.Apple />
                         <div>
                           <div className="bold">App Store</div>
-                          <div style={{fontSize: '10px', color: '#888'}}>Скачать V2Box</div>
+                          <div style={{fontSize: '10px', color: '#888'}}>Скачать V2RayTun</div>
                         </div>
                       </div>
                     </button>
@@ -414,7 +427,7 @@ function App() {
                       </div>
                     </div>
                  </button>
-                 
+
                  <div style={{background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', fontSize: '12px', marginTop: '5px'}}>
                     <span style={{color: '#fbbf24'}}>⚠️ Важно:</span> После добавления, если список пуст — нажмите <span className="bold">"Обновить подписку"</span>.
                  </div>

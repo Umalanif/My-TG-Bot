@@ -18,7 +18,7 @@
 body {
   margin: 0;
   padding: 0;
-  background-color: var(--bg-dark); 
+  background-color: var(--bg-dark);
   font-family: 'Rajdhani', sans-serif;
   color: var(--text-white);
   -webkit-font-smoothing: antialiased;
@@ -64,19 +64,72 @@ body {
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: center; /* Центрируем по вертикали */
   margin-bottom: 24px;
-  padding: 0 8px;
+  padding: 0 4px;
+  gap: 15px;
 }
+
 .logo-container {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column; /* Логотип теперь в две строки */
+  align-items: flex-start;
+  gap: 2px;
+  flex-shrink: 0;
 }
+
 .logo-text {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 20px; /* Вернули размер */
+  line-height: 1;
+  font-weight: 800;
   letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* Информативная плашка лимита */
+.device-limit-badge {
+  display: flex;
+  flex-direction: column; /* Текст под иконкой для стиля */
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  padding: 6px 12px;
+  border-radius: 10px;
+  min-width: 100px;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+}
+
+.device-limit-label {
+  font-size: 8px;
+  font-weight: 700;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.device-limit-value {
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+/* Новый бейдж лимита устройств */
+.device-limit-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: var(--primary);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
 }
 
 /* --- КАРТОЧКИ (СТЕКЛО) --- */
@@ -188,7 +241,7 @@ body {
 .hiddify-icon {
   width: 48px; height: 48px;
   border-radius: 12px;
-  background: var(--primary); 
+  background: var(--primary);
   display: flex; align-items: center; justify-content: center;
 }
 
@@ -217,7 +270,6 @@ body {
   border-radius: 2px; margin: 0 auto 20px;
 }
 
-/* Кнопка с заливкой (цвет текста изменен на черный для лучшего контраста с ярким циановым) */
 .btn-primary {
   width: 100%; padding: 16px;
   background: var(--primary); color: #000;
